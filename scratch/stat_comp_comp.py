@@ -209,7 +209,7 @@ class StatCompComponent(om.ExplicitComponent):
                     path = self.options["name"]
                     plt.savefig(f"./{path}/subprob_surr_2d_iter_{self.sampler.iter_max}.pdf")    
                     plt.clf()
-
+                    import pdb; pdb.set_trace()
 
                     # import pdb; pdb.set_trace()
                     # plot robust func
@@ -340,7 +340,11 @@ class StatCompComponent(om.ExplicitComponent):
             self.sampler.add_data(N, replace_current=True)
 
         else:
-            self.sampler.N += N
+            if isinstance(self.sampler.N, list):
+                for i in range(len(self.sampler.N)):
+                    self.sampler.N[i] += N
+            else:
+                self.sampler.N += N
             self.jump = N
             self.sampler.refine_uncertain_points(N)
 

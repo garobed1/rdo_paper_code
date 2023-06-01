@@ -45,6 +45,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
     A = sum(dens)/N_act
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
+    import pdb; pdb.set_trace()
 
     return (mean, stdev), vals
 
@@ -78,7 +79,6 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
             # grads[l1:l2,:] = convert_to_smt_grads(func_handle, arrs[k])
             for ki in range(dim):
                 grads[l1:l2,ki] = func_handle(arrs[k], kx=ki)[:,0]
-        
         for j in range(dim):
             #import pdb; pdb.set_trace()
             if not isinstance(pdf_list[j], float):
@@ -86,12 +86,9 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
                     dens[l1:l2,:] = np.multiply(dens[l1:l2,:], pdf_list[j].pdf(arrs[k][:,j]).reshape((l2-l1, 1))) #TODO: loc must be different for certain dists
                 else:
                     dens[l1:l2,:] = np.atleast_2d(weights[l1:l2]).T
-
         summand[l1:l2,:] = dens[l1:l2,:]*vals[l1:l2,:]
-        
         for j in range(dim_d):
             gsummand[l1:l2,j] = dens[l1:l2,:][:,0]*grads[l1:l2,static_list[j]]
-        
         l1 += arrs[k].shape[0]
 
     area = 1
@@ -109,7 +106,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     work3 = np.multiply(2*summand, grads[:,static_list])
     work3 = (area/N)*np.sum(work3, axis=0)
     gstdev = work*(work3 - work2)
-
+    import pdb; pdb.set_trace()
     #return full gradients, but gmean and gstdev are only with respect to dvs
     return (gmean, gstdev), grads
 

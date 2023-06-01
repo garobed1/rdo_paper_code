@@ -199,7 +199,7 @@ def stat_comp(model, prob, stat_type="mu_sigma", N=5000, xdata=None, fdata=None,
 
         return grad_tup
 
-    out_tup, vals = _stat_handle[stat_type](func_handle, N, tx, xlimits, u_scales, pdf_list, tf=tf)
+    out_tup, vals = _stat_handle[stat_type](func_handle, N, tx, xlimits, u_scales, pdf_list, tf=tf, weights=weights)
     
     if using_sampler:
         xdata.set_evaluated_func(vals)

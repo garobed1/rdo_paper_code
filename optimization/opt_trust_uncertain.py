@@ -6,6 +6,8 @@ from optimization.optimizers import optimize
 from optimization.robust_objective import RobustSampler
 from optimization.opt_subproblem import OptSubproblem
 from utils.om_utils import get_om_design_size, om_dict_to_flat_array
+from optimization.trust_bound_comp import TrustBound
+from collections import OrderedDict
 
 from smt.utils.options_dictionary import OptionsDictionary
 
@@ -25,7 +27,9 @@ class UncertainTrust(OptSubproblem):
 
 
         super().__init__(**kwargs)
-
+        self.trust_opt = 0
+        self.grad_lhs = []
+        self.grad_rhs = []
 
     def _declare_options(self):
         
@@ -41,6 +45,12 @@ class UncertainTrust(OptSubproblem):
             default=1.0, 
             types=float,
             desc="trust radius at the first iteration"
+        )
+        declare(
+            "trust_option", 
+            default=1, 
+            types=int,
+            desc="1: use sphere component, 2: use dv bounds (linear)"
         )
 
         declare(
@@ -78,6 +88,13 @@ class UncertainTrust(OptSubproblem):
             desc="coefficient for increasing radius"
         )
 
+        declare(
+            "xi", 
+            default=0.01, 
+            types=float,
+            desc="coefficient for inexact gradient condition"
+        )
+
 
         declare(
             "max_trust_radius", 
@@ -99,13 +116,46 @@ class UncertainTrust(OptSubproblem):
             types=bool,
             desc="If the model uses a surrogate, add the truth evaluations to its training data"
         )
-        
+
         declare(
-            "gradient_proximity_ref", 
+            "trust_increase_terminate", 
             default=False, 
             types=bool,
-            desc="Scale refinement by how close we are to the gradient tolerance. this is how Kouri (2013) works"
+            desc="if trust model predicts increase, terminate"
         )
+        
+        declare(
+            "ref_strategy", 
+            default=0, 
+            types=int,
+            desc="""
+                 0: Flat refinement
+                 1: Refine by first-order proximity to 0
+                 2: Refine by inexact gradient condition (Conn, Kouri papers)
+                 """
+        )
+
+    def _setup_final(self):
+        """
+        Configure the trust region settings here
+
+        """
+        self.trust_opt = self.options["trust_option"]
+
+        if self.trust_opt == 1 or self.trust_opt == 0:
+            # need list of dvs now
+            dv_settings = {}
+            #TODO: Need to automate this somehow
+            dv_settings["x_d"] = OrderedDict({'name':'x_d', 'size':1, 'distributed':False})
+            self.prob_model.model.add_subsystem('trust', 
+                                      TrustBound(dv_dict=dv_settings, 
+                                                    initial_trust_radius=self.options['initial_trust_radius']), 
+                                                    promotes_inputs=list(dv_settings.keys()))
+            self.prob_model.model.add_constraint('trust.c_trust', lower=0.0)
+        elif self.trust_opt == 2:
+            pass
+        else:
+            Exception("No trust region type specified!")
 
     def solve_full(self):
 
@@ -141,6 +191,7 @@ class UncertainTrust(OptSubproblem):
         """
 
         gtol = self.options['gtol']
+        stol = self.options['stol']
         miter = self.options['max_iter']
         max_trust_radius = self.options['max_trust_radius']
         initial_trust_radius = self.options['initial_trust_radius']
@@ -149,7 +200,7 @@ class UncertainTrust(OptSubproblem):
         eta_2 = self.options['eta_2']
         gamma_1 = self.options['gamma_1']
         gamma_2 = self.options['gamma_2']
-
+        xi = self.options["xi"]
         
 
         if not (0 <= eta_0 < 1.0):
@@ -167,8 +218,8 @@ class UncertainTrust(OptSubproblem):
                          'max trust radius')
 
 
-
-        
+        self.grad_lhs = []
+        self.grad_rhs = []        
 
         # initial guess in dict format, whatever the current state of the OM system is
         z0 = self.prob_model.driver.get_design_var_values()
@@ -197,6 +248,13 @@ class UncertainTrust(OptSubproblem):
         ferr = 1e6
         gerr = 1e6
 
+        # get DV bounds
+        dvbl = {}
+        dvbu = {}
+        for name in dvsettings:
+            dvbl[name] = copy.deepcopy(dvsettings[name]['lower'])
+            dvbu[name] = copy.deepcopy(dvsettings[name]['upper'])
+
         # we assume that fidelity belongs to the top level system
         # calling it stat for now
         reflevel = self.prob_model.model.stat.get_fidelity()
@@ -207,11 +265,10 @@ class UncertainTrust(OptSubproblem):
         trust_radius = initial_trust_radius
         zk = z0
 
-
         # validate the first point before starting
         self._eval_truth(zk)
         ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
-        # this needs to be the lagrangian gradient with constraints
+        #TODO: this needs to be the lagrangian gradient with constraints
         gtru = self.prob_truth.compute_totals(return_format='array')
         gerr = np.linalg.norm(gtru)
         gerr0 += gerr
@@ -220,7 +277,7 @@ class UncertainTrust(OptSubproblem):
             getext = str(gerr)
 
         while (gerr > gtol) and (k < miter):
-            fail = 1
+            fail = 100
             if self.options["print"]:
                 print("\n")
                 print(f"Outer Iteration {k} ")
@@ -243,9 +300,24 @@ class UncertainTrust(OptSubproblem):
 
             # 
             zk_cent = copy.deepcopy(zk)
+            # import pdb; pdb.set_trace()
+            #TODO: SCALED TRUST REGION
+            if self.trust_opt == 1:
+                self.prob_model.model.trust.set_center(zk_cent)
+            else: #BOX, self.trust_opt == 2
+                for name in dvsettings:
+                    llmt = np.maximum(zk_cent[name] - trust_radius, dvbl[name])
+                    ulmt = np.minimum(zk_cent[name] + trust_radius, dvbu[name])
+                    #TODO: Annoying absolute name path stuff
+                    self.prob_model.model.set_design_var_options(name.split('.')[-1], lower=llmt, upper=ulmt)
+                
+            # self.prob_model.check_partials()
+            # import pdb; pdb.set_trace()
             fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             self._solve_subproblem(zk)  
             fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
+
+            
 
             #Eval Truth
             if self.options["print"]:
@@ -262,9 +334,23 @@ class UncertainTrust(OptSubproblem):
             # =================================================================
             actual_reduction = ftru_cent - ftru_cand
             predicted_reduction = ftru_cent - fmod_cand
-            if predicted_reduction <= 0:
+            # need distance of prediction, and if its on edge of radius
+            # the dv arrays originate from OrderedDict objects, so this should be fine
+            zce_arr = om_dict_to_flat_array(zk_cent, dvsettings, dvsize)
+            zca_arr = om_dict_to_flat_array(zk_cand, dvsettings, dvsize)
+            s = zca_arr - zce_arr
+            sdist = np.linalg.norm(s)
+            # If the predicted step size is small enough
+            if sdist < stol:
+                fail = 0
+                succ = 3
+                break
+
+            if predicted_reduction <= 0 and self.options['trust_increase_terminate']:
                 fail = 2
                 break
+            # if predicted_reduction <= 0:
+            #     import pdb; pdb.set_trace()
             eta_k = actual_reduction/predicted_reduction
 
             # choose to accept or not
@@ -285,13 +371,7 @@ class UncertainTrust(OptSubproblem):
             #   adjust trust radius
             # =================================================================
             
-            # need distance of prediction, and if its on edge of radius
-            # the dv arrays originate from OrderedDict objects, so this should be fine
-            zce_arr = om_dict_to_flat_array(zk_cent, dvsettings, dvsize)
-            zca_arr = om_dict_to_flat_array(zk_cand, dvsettings, dvsize)
-            s = zca_arr - zce_arr
-            sdist = np.norml2(s)
-
+            
             # a few ways of doing this
             # bad prediction, reduce radius to fraction of candidate distance
             # right now this is Rodriguez (1998), if eta_0 and eta_1 are the same
@@ -303,20 +383,31 @@ class UncertainTrust(OptSubproblem):
                 trust_radius = gamma_1*trust_radius
             elif eta_k_act > eta_2:
                 # check if trust constraint is active AKA we are on the boundary
-                if self.prob_model.get_val('trust.c_trust') < 1e-6: #NOTE: should change how we do this
+                if self.trust_opt == 1:
+                    trustconval = self.prob_model.get_val('trust.c_trust') 
+                else:
+                    # find out if we're on a bound or not
+                    w1 = np.min(np.abs(zca_arr - llmt))
+                    w2 = np.min(np.abs(zca_arr - ulmt))
+                    trustconval = min(w1, w2)
+                if trustconval < 1e-6: #NOTE: should change how we do this
                     trust_radius = gamma_2*trust_radius
 
+            if self.trust_opt == 1:
+                self.prob_model.model.trust.set_radius(trust_radius)
 
+            # import pdb; pdb.set_trace()
             # this needs to be the lagrangian gradient with constraints
-            # gmod = self.prob_model.compute_totals(return_format='array')
+            gmod = self.prob_model.compute_totals(return_format='array')
             gtru = self.prob_truth.compute_totals(return_format='array')
 
             # ferr = abs(fmod-ftru)
 
             # perhaps instead we try the condition from Kouri (2013)?
-            # not really, it uses the model gradient, which is known to be
-            # close to the true gradient as a result of the algorithm assumptions
+            # import pdb; pdb.set_trace()
 
+            # also introduce a step tolerance, sdist < stol
+            gerrm = np.linalg.norm(gmod)
             gerr = np.linalg.norm(gtru)
 
             if k == 0:
@@ -325,20 +416,33 @@ class UncertainTrust(OptSubproblem):
 
             fetext = str(ferr)
             getext = str(gerr)
-            # ferr = 
-            # gerr = c
 
-            #If f or g metrics are not met, 
+            # compute inexact gradient condition
+            lhs0 = np.linalg.norm(gmod-gtru)
+            rhs0 = min(gerrm, sdist)
+            xi_calc = lhs0/rhs0
+
+            #If g truth metrics are not met, 
             if gerr < gtol:
                 fail = 0
+                succ = 1
                 break
 
+            # Alternatively, use the inexact gradient condition
+            if lhs0 < xi*rhs0 and gerrm < gtol:
+                fail = 0
+                succ = 2
+                break
+
+            
+
+
             """
-            This still doesn't quite work, even getting close to the truth the smaller 
+            This doesn't quite work, even getting close to the truth the smaller 
             the gradient, we're still using different points, and the two models don't
             agree
             """
-            if(self.options["gradient_proximity_ref"]):
+            if(self.options["ref_strategy"] == 1):
                 grel = gerr-gtol
                 gclose = 1. - grel/grange
                 rmin = self.options["flat_refinement"] #minimum improvement
@@ -349,44 +453,93 @@ class UncertainTrust(OptSubproblem):
                 refjump = rmin + max(0, int(fac*rcap))
                 # import pdb; pdb.set_trace()
 
-            # grab sample data from the truth model if we are using a surrogate
-            if self.prob_model.model.stat.surrogate and self.options["use_truth_to_train"]:
-                truth_eval = self.prob_truth.model.stat.sampler.current_samples
-                if self.options["print"]:
-                    print(f"    Refining model with {truth_eval['x'].shape[0]} validation points")
-                self.prob_model.model.stat.refine_model(truth_eval)
-                reflevel = self.prob_model.model.stat.xtrain_act.shape[0]
+
+            # Ensure that the inexact gradient condition is met by adding enough points
+            # \|\Nabla m_k(z_k) - \Nabla J(z_k)\| \leq \xi min(\|\Nabla m_k(z_k)\|, sdist)
+            # or lhs = \xi rhs
+            # \xi = 0.01 default
+            # Question remains on how to ensure this with enough points
+            # Report this for each iteration
+            lhs = lhs0
+            rhs = rhs0
+            if(self.options["ref_strategy"] == 2):
+                # for now, fully calculate the new lhs and rhs
+
+                rmin = self.options["flat_refinement"] #minimum improvement
+                rcap = self.prob_truth.model.stat.get_fidelity()
+
+                rk = 0
+                while(lhs > xi*rhs and reflevel < rcap):
+                    rk += 1
+                    refjump = rmin
+                    if self.options["print"]:
+                        print(f"    Inexact Iter: {rk}, Refining model by adding {refjump} points to evaluation")
+                    # import pdb; pdb.set_trace()
+                    self.prob_model.model.stat.refine_model(refjump)
+                    reflevel += refjump
+                    self.prob_model.run_model()
+                    gmod = self.prob_model.compute_totals(return_format='array')
+                    gerrm = np.linalg.norm(gmod)
+                    lhs = np.linalg.norm(gmod-gtru)
+                    rhs = min(gerrm, sdist)
+                    print(f"Level: {reflevel}")
+                    print(f"LHS: {lhs}")
+                    print(f"RHS: {rhs}")
+                    print(f"xi*RHS - LHS = {rhs*xi - lhs}")
+                    # import pdb; pdb.set_trace()
+
             else:
-                if self.options["print"]:
-                    print(f"    Refining model by adding {refjump} points to evaluation")
-                self.prob_model.model.stat.refine_model(refjump)
-                reflevel += refjump
+
+                # grab sample data from the truth model if we are using a surrogate
+                if self.prob_model.model.stat.surrogate and self.options["use_truth_to_train"]:
+                    truth_eval = self.prob_truth.model.stat.sampler.current_samples
+                    if self.options["print"]:
+                        print(f"    Refining model with {truth_eval['x'].shape[0]} validation points")
+                    self.prob_model.model.stat.refine_model(truth_eval)
+                    reflevel = self.prob_model.model.stat.xtrain_act.shape[0]
+                else:
+                    if self.options["print"]:
+                        print(f"    Refining model by adding {refjump} points to evaluation")
+                    self.prob_model.model.stat.refine_model(refjump)
+                    reflevel += refjump
+
 
             k += 1            
             self.outer_iter = k
-
+            self.grad_lhs.append(lhs)
+            self.grad_rhs.append(rhs)
+            print(f"LHS: {lhs}")
+            print(f"RHS: {rhs}")
+            print(f"xi*RHS - LHS = {rhs*xi - lhs}")
         if fail:
             failure_messages = (
-                f'unsuccessfully, true gradient norm: {getext}',
+                f'unsuccessfully, true gradient norm above tolerance: {getext}',
                 f'unsuccessfully, trust region predicts increase'
             )
-            succ = failure_messages[fail-1]
+            message = failure_messages[fail-1]
 
         else:
-            succ = 'successfully!'
+            success_messages = (
+                f'successfully!',
+                f'successfully, true gradient norm below tolerance: {getext}',
+                f'successfully, inexact gradient condition met and model gradient norm below tolerance: {gerrm}',
+                f'successfully, step size below tolerance: {sdist}'
+            )
+            message = success_messages[succ]
 
         zk = self.prob_model.driver.get_design_var_values()
         self.result_cur = zk
 
         print("\n")
-        print(f"Optimization terminated {succ}")
+        print(f"Optimization terminated {message}")
         print(f"-------------------")
         print(f"    Outer Iterations: {self.outer_iter}")
         # Add constraint loop as well
         print(f"    -")
         print(f"    Final design vars: {zk}")
         print(f"    Final objective: {ftru}")
-        print(f"    Final gradient norm: {getext}")
+        print(f"    Final truth gradient norm: {getext}")
+        print(f"    Final model gradient norm: {gerrm}")
         print(f"    Final model error: {fetext}")
         print(f"    Final model level: {reflevel}")
 

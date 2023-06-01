@@ -75,7 +75,14 @@ class OptSubproblem():
             "gtol", 
             default=1e-6, 
             types=float,
-            desc="Maximum allowable TRUTH gradient L2 norm at sub-optimization solutions"
+            desc="Maximum allowable gradient L2 norm at sub-optimization solutions"
+        )
+
+        declare(
+            "stol", 
+            default=0.0, 
+            types=float,
+            desc="step size tolerance"
         )
 
         declare(
@@ -117,6 +124,11 @@ class OptSubproblem():
             print(f"{self.name}: Both the model and truth systems need to be assigned before setting up!")
             return
 
+        self._setup_final() # components may get added here
+
+        # call om setup on them here
+        self.prob_model.setup()
+        self.prob_truth.setup()
 
         model_ins = list(self.prob_model.model.get_design_vars().keys())
         truth_ins = list(self.prob_truth.model.get_design_vars().keys())
@@ -135,8 +147,12 @@ class OptSubproblem():
         self.prob_outs = truth_outs
         self.prob_cons = truth_cons
 
+        
         self.setup_completed = True
         
+    def _setup_final(self):
+        pass
+
     def solve_full(self):
         """
         Solve the overall optimization problem by solving successive subproblems
@@ -281,10 +297,13 @@ class SequentialFullSolve(OptSubproblem):
         )
         
         declare(
-            "gradient_proximity_ref", 
-            default=False, 
-            types=bool,
-            desc="Scale refinement by how close we are to the gradient tolerance"
+            "ref_strategy", 
+            default=0, 
+            types=int,
+            desc="""
+                 0: Flat refinement
+                 1: Refine by first-order proximity to 0
+                 """
         )
 
     def solve_full(self):
@@ -377,7 +396,7 @@ class SequentialFullSolve(OptSubproblem):
             the gradient, we're still using different points, and the two models don't
             agree
             """
-            if(self.options["gradient_proximity_ref"]):
+            if(self.options["ref_strategy"]):
                 grel = gerr-gtol
                 gclose = 1. - abs(grel/grange)
                 rmin = self.options["flat_refinement"] #minimum improvement

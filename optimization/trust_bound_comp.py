@@ -23,51 +23,60 @@ class TrustBound(om.ExplicitComponent):
     
         # need to initialize this component with a list of dvs
         self.options.declare("dv_dict", default=None, recordable=False)
+        self.options.declare("initial_trust_radius", default=-1., recordable=False)
 
     def setup(self):
         dv_settings = self.options["dv_dict"]
-
+        self.radius = self.options["initial_trust_radius"]
         # if dv_settings is None:
         #     Exception("TrustBound component requires an OpenMDAO list of DVs and metadata!")
         
-        # # add each design variable as an input, according to the passed dv_dict
-        # for name, meta in dv_settings.items():
         
-        #     self.add_input(name, shape=meta['size']) 
+
+        # # add each design variable as an input, according to the passed dv_dict
+        self.add_output('c_trust')
+        # import pdb; pdb.set_trace()
+        for name, meta in dv_settings.items():
+            self.add_input(name, shape=meta['size']) 
+            self.declare_partials('c_trust', name)
             # self.connect() # do this via promotes_inputs
     
+         # no values in here
+
         # NOTE: this is computed as proximity to trust bound, i.e. rad - norm(sk - zk) = c
         # constraint should be set with lower=0.0
-        self.add_output('c_trust')
-        self.declare_partials('c_trust', '*')
 
     def compute(self, inputs, outputs):
 
         location = self.location
         radius = self.radius
         
+        location_list = self.options["dv_dict"]
+
+
         # no bound
-        if radius < 0.0:
+        if radius < 0.0 or location == None:
             outputs['c_trust'] = 10.
             return
     
-        tsize = get_om_design_size(self.location)
+        tsize = get_om_design_size(location_list)
 
         # bound
         center_desvar_array = np.zeros(tsize)
         candid_desvar_array = np.zeros(tsize)
 
         i = 0
-        for name, meta in location.items():
+        # import pdb; pdb.set_trace()
+        for name, meta in location_list.items():
             size = meta['global_size'] if meta['distributed'] else meta['size']
-            center_desvar_array[i:i + size] = location[name]
+            center_desvar_array[i:i + size] = location[f'dvs.{name}']
             candid_desvar_array[i:i + size] = inputs[name]
             i += size
 
         dist_flat = candid_desvar_array - center_desvar_array
-        dist = np.norml2(dist_flat)
-
-        outputs['c_trust'] = radius - dist
+        dist = np.linalg.norm(dist_flat)
+        # import pdb; pdb.set_trace()
+        outputs['c_trust'] = radius**2 - dist**2
 
 
 
@@ -77,34 +86,38 @@ class TrustBound(om.ExplicitComponent):
         # no bound
         location = self.location
         radius = self.radius
-        
+
+        location_list = self.options["dv_dict"]
+
         # no bound
-        if radius < 0.0:
-            partials['c_trust','*'] = 0.0 # CHANGE THIS
+        if radius < 0.0 or location == None:
+            for name, meta in location.items():
+                partials['c_trust', name] = 0.0
             return
         
-        tsize = get_om_design_size(self.location)
+        tsize = get_om_design_size(location_list)
 
         # bound
         center_desvar_array = np.zeros(tsize)
         candid_desvar_array = np.zeros(tsize)
 
         i = 0
-        for name, meta in location.items():
+        for name, meta in location_list.items():
             size = meta['global_size'] if meta['distributed'] else meta['size']
-            center_desvar_array[i:i + size] = location[name]
+            center_desvar_array[i:i + size] = location[f'dvs.{name}']
             candid_desvar_array[i:i + size] = inputs[name]
             i += size
 
         dist_flat = candid_desvar_array - center_desvar_array
-        dist = np.norml2(dist_flat)
+        dist = np.linalg.norm(dist_flat)
 
         i = 0
-        for name, meta in location.items():
+        for name, meta in location_list.items():
             size = meta['global_size'] if meta['distributed'] else meta['size']
 
-            partials['c_trust', name] = dist_flat[i:i + size]/dist
+            partials['c_trust', name] = -2.*dist_flat[i:i + size]*dist
             i += size
+        # import pdb; pdb.set_trace()
 
 
     def set_center(self, zk):

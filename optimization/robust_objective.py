@@ -92,6 +92,14 @@ class RobustSampler():
             desc="keep the same points in the uncertain space as we traverse the design space",
         )
 
+        self.options.declare(
+            "external_only",
+            types=bool,
+            default=False,
+            desc="only use with surrogate. when design is updated, don't add new points at all",
+        )   #TODO: This will likely need tweaking, and allow for both kinds of training data updates
+
+
         self._declare_options()
         self.options.update(kwargs)
 
@@ -137,13 +145,7 @@ class RobustSampler():
 
     def _declare_options(self):
         # add exclusive options
-        self.options.declare(
-            "external_only",
-            types=bool,
-            default=False,
-            desc="only use with surrogate. when design is updated, don't add new points at all",
-        )   #TODO: This will likely need tweaking, and allow for both kinds of training data updates
-
+        
         self.options.declare(
             "design_noise",
             types=float,
@@ -437,9 +439,13 @@ class CollocationSampler(RobustSampler):
             j = self.x_u_ind[i]
             pname = self.pdf_name[i]
             if pname == "beta":
+                # import pdb; pdb.set_trace()
                 poly_list.append(lambda n: _poly_root_types["beta"](n, 
-                                                                    alpha=self.pdf_list[j][1],
-                                                                    beta=self.pdf_list[j][2]))
+                                                                    alpha=self.pdf_list[j].args[1]-1,
+                                                                    beta=self.pdf_list[j].args[0]-1)) # need to subtract one?
+                                                                    # alpha=self.pdf_list[j].args[1]-1,
+                                                                    # beta=self.pdf_list[j].args[0]-1)) # need to subtract one and reverse?
+                # import pdb; pdb.set_trace()
             else: # don't require additional args
                 poly_list.append(_poly_root_types[pname])
 
@@ -483,6 +489,11 @@ class CollocationSampler(RobustSampler):
         #TODO: ONLY WORKS FOR DISTS RANGING -1 to 1, NORMAL DIST IS UNCLEAR
         for i in range(self.x_u_dim):
             x_nsc, w = self.poly_list[i](self.N[i])
+            pname = self.pdf_name[i]
+            # if pname == 'beta':
+            #     w /= 2**(self.pdf_list[i].args[0] + self.pdf_list[i].args[1]-1)
+            #     w *= 6 #WHYYY DOES THIS WORK!!!
+            # import pdb; pdb.set_trace()
             # x = x*(self.scales[i]/2) + (0.5*self.scales[i] + xlimits[i,0])
             absc_nsc.append(x_nsc)
             x = 0.5*(x_nsc + 1.)*self.scales[i] + xlimits[i,0]
