@@ -109,7 +109,7 @@ if use_surrogate:
     msur.options.update({"min_contribution":min_contributions})
     msur.options.update({"print_prediction":False})
 
-pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
+pdfs = [['beta', 2., 3.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 max_outer = 20
