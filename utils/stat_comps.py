@@ -45,7 +45,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
     A = sum(dens)/N_act
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
 
     return (mean, stdev), vals
 
@@ -96,8 +96,8 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
         area = np.prod(scales) #just a hypercube
         N_act = copy.deepcopy(N)
     mean = area*sum(summand)/N_act
-    gmean = (area/N)*np.sum(gsummand, axis=0 )
-
+    gmean = (area/N_act)*np.sum(gsummand, axis=0 )
+    
     #stdev = np.sqrt(((area*sum(summand*vals))/N - (mean)**2))#/N
     A = sum(dens)/N_act
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
@@ -106,7 +106,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     work3 = np.multiply(2*summand, grads[:,static_list])
     work3 = (area/N)*np.sum(work3, axis=0)
     gstdev = work*(work3 - work2)
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     #return full gradients, but gmean and gstdev are only with respect to dvs
     return (gmean, gstdev), grads
 

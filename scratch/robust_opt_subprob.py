@@ -36,44 +36,60 @@ ref_strategy = 2
 """
 
 
-# surrogate
+##### surrogate #####
 use_truth_to_train = True #NEW, ONLY IF USING SURR
-
 use_surrogate = False
 full_surrogate = True
+retain_uncertain_points = True
 
-use_collocation = True #NEW, USE DENSE COLLOCATION
+##### design noise idea ##### (not particularly relevant)
 use_design_noise = False #NEW, ONLY IF USING SURR
 design_noise = 0.0
+design_noise_act = 0.0
 
+
+##### trust region #####
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 1.0
+# eta1
+# eta2
+# gamma1
+# gamma2
 
-print_plots = True
-
+##### optimization #####
 x_init = 5.
-# set up robust objective UQ comp parameters
+# gtol 
+# stol
+# xi
+
+##### UQ Parameters #####
 u_dim = 1
 eta_use = 1.0
 N_t = 5000*u_dim
 # N_t = 500*u_dim
-N_m = 10
+N_m = 2
 jump = 100
-scN_t = 30
-scN_m = 20
+##### Collocation UQ #####
+use_collocation = True #NEW, USE DENSE COLLOCATION
+scN_t = 48
+scN_m = 2
 scjump = 1 # stochastic collocation jump
-retain_uncertain_points = True
-external_only = (use_truth_to_train and use_surrogate) #NEW
 
-design_noise_act = 0.0
-if(use_design_noise and use_surrogate): #NEW
-    design_noise_act = design_noise
+
+##### plotting #####
+print_plots = True
 
 # set up beta test problem parameters
 dim = 2
 prob = 'betatestex'
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
+
+############################
+#### SCRIPT BEGINS HERE ####
+############################
+
+external_only = (use_truth_to_train and use_surrogate) #NEW
 
 func = GetProblem(prob, dim)
 xlimits = func.xlimits
@@ -109,7 +125,7 @@ if use_surrogate:
     msur.options.update({"min_contribution":min_contributions})
     msur.options.update({"print_prediction":False})
 
-pdfs = [['beta', 2., 3.], 0.] # replace 2nd arg with the current design var
+pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 max_outer = 20
@@ -123,15 +139,15 @@ if(use_collocation):
     jump = scjump
     N_t = scN_t
     N_m = scN_m
-    # sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
-    #                       name='truth', 
-    #                       xlimits=xlimits, 
-    #                       probability_functions=pdfs)
-    sampler_t = RobustSampler(np.array([x_init]), N=5000, 
+    sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
                           xlimits=xlimits, 
-                          probability_functions=pdfs, 
-                          retain_uncertain_points=retain_uncertain_points)
+                          probability_functions=pdfs)
+    # sampler_t = RobustSampler(np.array([x_init]), N=5000, 
+    #                       name='truth', 
+    #                       xlimits=xlimits, 
+    #                       probability_functions=pdfs, 
+    #                       retain_uncertain_points=retain_uncertain_points)
     sampler_m = CollocationSampler(np.array([x_init]), N=N_m, 
                           name='model', 
                           xlimits=xlimits, 
@@ -253,6 +269,7 @@ if trust_region_bound: #anything but 0
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
+                                    inexact_gradient_only=inexact_gradient_only,
                                     ref_strategy=ref_strategy)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 

@@ -681,12 +681,15 @@ Parameters:
     name: name of rc to use for plots
     obj: rc object itself
     
-    NOTE: NO DIR IMPLEMENTED EITHER FOR NOW
 """
-def print_rc_plots(n, bounds, name, obj):
-    
+def print_rc_plots(bounds, name, obj, dir=0):
+
+    n = bounds.shape[0]
+
     if(n == 1):
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = '16'
+
         ndir = 400
         # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
         # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
@@ -695,7 +698,7 @@ def print_rc_plots(n, bounds, name, obj):
         for i in range(ndir):
             xi = np.zeros([1])
             xi[0] = x[i]
-            F[i]  = -obj.evaluate(xi, bounds)  #TODO: ADD DIR
+            F[i]  = -obj.evaluate(xi, bounds, dir)  #TODO: ADD DIR
         if(obj.ntr == 10):
             obj.scaler = np.max(F)
         obj.scaler = 1.0
@@ -707,7 +710,7 @@ def print_rc_plots(n, bounds, name, obj):
         plt.xlim(-0.05, 1.05)
         plt.ylim(top=1.0)
         plt.ylim(bottom=-0.015)#np.min(F))
-        trxs = qmc.scale(obj.model.training_points[None][0][0], bounds[:,0], bounds[:,1], reverse=True)
+        trxs = qmc.scale(obj.trx, bounds[:,0], bounds[:,1], reverse=True)
         #plt.plot(trxs[-1,0], [0], 'ro')
         plt.plot(trxs[0:,0], np.zeros(trxs[0:,0].shape[0]), 'bo', label='Sample Locations')
         plt.legend(loc=0)
@@ -729,6 +732,8 @@ def print_rc_plots(n, bounds, name, obj):
 
     if(n == 2):
         import matplotlib.pyplot as plt
+        plt.rcParams['font.size'] = '16'
+
         from functions.example_problems_2 import ALOSDim
         trueFunc = ALOSDim(ndim=2)
         ndir = 75
@@ -747,11 +752,12 @@ def print_rc_plots(n, bounds, name, obj):
                 xi[1] = y[j]
                 FM[i,j] = obj.model.predict_values(np.atleast_2d(xi))
                 FT[i,j] = trueFunc(np.atleast_2d(xi))
-                F[i,j]  = obj.evaluate(xi, bounds) #TODO: ADD DIR
+                F[i,j]  = obj.evaluate(xi, bounds, dir) #TODO: ADD DIR
         cs = plt.contourf(Y, X, F, levels = np.linspace(np.min(F), 0., 25))
         plt.colorbar(cs)
-        trx = obj.model.training_points[None][0][0]
-        trxs = qmc.scale(obj.model.training_points[None][0][0], bounds[:,0], bounds[:,1], reverse=True)#obj.trx, 
+        trx = obj.trx
+        # trxs = obj.trx
+        trxs = qmc.scale(obj.trx, bounds[:,0], bounds[:,1], reverse=True)#obj.trx, 
         plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
         plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
         target = np.unravel_index(np.argmin(F, axis=None), F.shape)
@@ -773,9 +779,9 @@ def print_rc_plots(n, bounds, name, obj):
         plt.xlabel(r"$x_1$")
         plt.ylabel(r"$x_2$")
         #plt.legend(loc=1)
-        plt.plot(trx[0:-1,0], trx[0:-1,1], 'bo')
-        plt.plot(trx[-1,0], trx[-1,1], 'ro')
+        plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
+        plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
         plt.plot(y[target[0]], x[target[1]], 'go')
         plt.savefig(f"{name}_err_2d.pdf", bbox_inches="tight")
         plt.clf()
-        # import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()

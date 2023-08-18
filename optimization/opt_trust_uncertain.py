@@ -123,6 +123,13 @@ class UncertainTrust(OptSubproblem):
             types=bool,
             desc="if trust model predicts increase, terminate"
         )
+
+        declare(
+            "inexact_gradient_only", 
+            default=False, 
+            types=bool,
+            desc="if true, do not determine convergence based on truth model gradient, use the inexact gradient condition only"
+        )
         
         declare(
             "ref_strategy", 
@@ -423,7 +430,7 @@ class UncertainTrust(OptSubproblem):
             xi_calc = lhs0/rhs0
 
             #If g truth metrics are not met, 
-            if gerr < gtol:
+            if gerr < gtol and not self.options["inexact_gradient_only"]:
                 fail = 0
                 succ = 1
                 break
@@ -433,8 +440,6 @@ class UncertainTrust(OptSubproblem):
                 fail = 0
                 succ = 2
                 break
-
-            
 
 
             """
@@ -486,7 +491,6 @@ class UncertainTrust(OptSubproblem):
                     print(f"LHS: {lhs}")
                     print(f"RHS: {rhs}")
                     print(f"xi*RHS - LHS = {rhs*xi - lhs}")
-                    # import pdb; pdb.set_trace()
 
             else:
 
@@ -511,6 +515,8 @@ class UncertainTrust(OptSubproblem):
             print(f"LHS: {lhs}")
             print(f"RHS: {rhs}")
             print(f"xi*RHS - LHS = {rhs*xi - lhs}")
+            import pdb; pdb.set_trace()
+
         if fail:
             failure_messages = (
                 f'unsuccessfully, true gradient norm above tolerance: {getext}',

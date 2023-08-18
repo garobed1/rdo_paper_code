@@ -80,10 +80,6 @@ class AnisotropicRefine(ASCriteria):
         if(grad is not None):
             self.grad = grad
 
-        self.nnew = self.options["improve"]#int(self.ntr*self.options["improve"])
-        if(self.nnew == 0):
-            self.nnew = 1
-
         trx = self.model.training_points[None][0][0]
         trf = self.model.training_points[None][0][1]
         trg = np.zeros_like(trx)

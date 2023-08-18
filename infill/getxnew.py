@@ -33,7 +33,7 @@ xnew : ndarray
 
 """
 
-def getxnew(rcrit, bounds, nnew, options=None):
+def getxnew(rcrit, bounds, batch, options=None):
     
     # set default options if None is provided
     if(options == None):
@@ -45,7 +45,7 @@ def getxnew(rcrit, bounds, nnew, options=None):
     unit_bounds[:,1] = 1.
 
     # loop over batch
-    for i in range(nnew):
+    for i in range(batch):
         rx = None
         if(rcrit.opt): #for methods that don't use optimization
             x0, lbounds = rcrit.pre_asopt(bounds, dir=i)
@@ -111,9 +111,9 @@ def getxnew(rcrit, bounds, nnew, options=None):
 
 
 
-def adaptivesampling(func, model0, rcrit, bounds, ntr, options=None):
+def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
 
-    count = int(ntr/rcrit.nnew)
+    count = int(ntr/batch)
     hist = []
     errh = []
     errh2 = []
@@ -122,8 +122,8 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, options=None):
     intervals = np.arange(0, count+1)
 
     for i in range(count):
-        try:
-        # if 1:
+        # try:
+        if 1:
             t0 = model.training_points[None][0][0]
             f0 = model.training_points[None][0][1]
             g0 = rcrit.grad
@@ -131,7 +131,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, options=None):
             #x0 = np.zeros([1, dim])
 
             # get the new points
-            xnew = np.array(getxnew(rcrit, bounds, rcrit.nnew, options))
+            xnew = np.array(getxnew(rcrit, bounds, batch, options))
             # import pdb; pdb.set_trace()
             # add the new points to the model
             t0 = np.append(t0, xnew, axis=0)
@@ -174,8 +174,8 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, options=None):
 
             # replace criteria
             rcrit.initialize(model, g0)
-        except:
-            print(f"Run on processor {rank} failed, returning what we have")
-            continue
+        # except:
+        #     print(f"Run on processor {rank} failed, returning what we have")
+        #     continue
         
     return model, rcrit, hist, errh, errh2

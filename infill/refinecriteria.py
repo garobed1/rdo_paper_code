@@ -6,11 +6,11 @@ from matplotlib import pyplot as plt
 from smt.utils.options_dictionary import OptionsDictionary
 from smt.sampling_methods import LHS
 from smt.surrogate_models import GEKPLS
-from surrogate.pougrad import POUSurrogate
+from surrogate.pougrad import POUSurrogate, POUHessian
 from scipy.linalg import lstsq, eig
 from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.optimize import Bounds
-from utils.sutils import linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
+from utils.sutils import print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
 
 """Base Class for Adaptive Sampling Criteria Functions"""
 class ASCriteria():
@@ -34,6 +34,22 @@ class ASCriteria():
         self.dim = self.model.training_points[None][kx][0].shape[1]
         self.ntr = self.model.training_points[None][kx][0].shape[0]
 
+        # if not isinstance(self.model, POUHessian):
+        #     trxs = self.model.training_points[None][0][0]
+        #     trfs = self.model.training_points[None][0][1]
+        #     (
+        #         trx,
+        #         trf,
+        #         X_offset,
+        #         y_mean,
+        #         X_scale,
+        #         y_std,
+        #     ) = standardization2(trxs, trfs, self.bounds)
+
+        # else:
+        #     trx = self.model.X_norma[0:self.ntr]#model.training_points[None][0][0]
+        self.trx = self.model.training_points[None][kx][0]
+
         self.supports = supports = {}
         supports["obj_derivatives"] = False
         supports["uses_constraints"] = False
@@ -48,17 +64,84 @@ class ASCriteria():
             types=bool,
             desc="Print plots of the RC function if 1D or 2D"
             )
+        self.options.declare(
+            "improve", 
+            0, 
+            types=int,
+            desc="Number of points to generate before retraining"
+            )
+
+        self.options.declare(
+            "multistart", 
+            1, 
+            types=int,
+            desc="number of optimizations to try per point"
+            )
 
         self.options.update(kwargs)
-        
-        self.nnew = 1
+
         self.opt = True
         self.condict = () #for constrained optimization
 
         self.initialize(self.model)
 
+
+
+    def pre_asopt(self, bounds, dir=0):
+        
+        xc, bounds_m = self._pre_asopt(bounds, dir)
+
+        # ### FD CHECK
+        # h = 1e-6
+        # zero = 0.5*np.ones([2])
+        # step = 0.5*np.ones([2])
+        # step[0] += h
+        # ad = self.eval_grad(zero, bounds, dir)
+        # fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        # step = 0.5*np.ones([2])
+        # step[1] += h
+        # fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        # fd = [fd1, fd2]
+        # import pdb; pdb.set_trace()
+
+        ### Print Criteria Plots
+        if(self.options["print_rc_plots"]):
+            print_rc_plots(bounds, "POUHESS", self, dir)
+
+        ### Multistart
+        sampling = LHS(xlimits=bounds, criterion='m')
+        ntries = self.options["multistart"]
+        if(ntries > 1):
+            xc = sampling(ntries)
+        else: 
+            xc = np.random.rand(self.dim)*(bounds[:,1] - bounds[:,0]) + bounds[:,0]
+            xc = np.array([xc])
+
+        ### Batches
+
+        return xc, bounds_m
+
+    def post_asopt(self, x, bounds, dir=0):
+
+        x = self._post_asopt(x, bounds, dir)
+
+        self.trx = np.append(self.trx, np.array([x]), axis=0)
+
+        return x
+
+
+
+    """
+    Overwrite
+    """
     def _init_options(self):
         pass
+
+    def _pre_asopt(self, bounds, dir=0):
+        return None, bounds
+
+    def _post_asopt(self, x, bounds, dir=0):
+        return x
 
     def initialize(self, model=None):
         pass
@@ -69,19 +152,17 @@ class ASCriteria():
     def eval_grad(self, x, dir=0):
         pass
 
-    def pre_asopt(self, bounds, dir=0):
-        pass
-
-    def post_asopt(self, x, bounds, dir=0):
-        pass
-
     def eval_constraint(self, x, dir=0):
         pass
 
     def eval_constraint_grad(self, x, dir=0):
         pass
 
-    # self determined stopping criteria, e.g. validation error
+    """
+    self determined stopping criteria, e.g. validation error
+
+    Integrate over self.evaluate
+    """
     def get_energy(self):
         return np.inf
 
@@ -259,10 +340,6 @@ class HessianFit(ASCriteria):
 
         if(grad is not None):
             self.grad = grad
-
-        self.nnew = self.options["improve"]#int(self.ntr*self.options["improve"])
-        if(self.nnew == 0):
-            self.nnew = 1
 
         trx = self.model.training_points[None][0][0]
         trf = self.model.training_points[None][0][1]
@@ -586,10 +663,6 @@ class TEAD(ASCriteria):
 
         if(grad is not None):
             self.grad = grad
-
-        self.nnew = self.options["improve"]#int(self.ntr*self.options["improve"])
-        if(self.nnew == 0):
-            self.nnew = 1
 
         trx = self.model.training_points[None][0][0]
         trf = self.model.training_points[None][0][1]

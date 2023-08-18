@@ -140,7 +140,7 @@ class SimpleConvex(Problem):
     def _initialize(self):
         self.options.declare("ndim", 1, values=[1], types=int)
         self.options.declare("order", 4, types=int)
-        self.options.declare("name", "MixedSine", types=str)
+        self.options.declare("name", "SimpleConvex", types=str)
 
     def _setup(self):
         self.xlimits[:, 0] = 0.0
