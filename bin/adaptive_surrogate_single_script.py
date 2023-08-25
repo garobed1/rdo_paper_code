@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys, os
 import shutil
 import copy
@@ -124,9 +126,9 @@ testdata = None
 
 try:
     chkpt = set.chkpt
+    intervals = np.arange(0, int(ntr/set.batch), chkpt)
 except:
-    chkpt = 1*set.batch
-intervals = np.arange(0, ntr, chkpt)
+    intervals = np.arange(0, int(ntr/set.batch))
 
 if(set.prob != 'shock'):
     if rank == 0:

@@ -735,7 +735,7 @@ def print_rc_plots(bounds, name, obj, dir=0):
         plt.rcParams['font.size'] = '16'
 
         from functions.example_problems_2 import ALOSDim
-        trueFunc = ALOSDim(ndim=2)
+        # trueFunc = ALOSDim(ndim=2)
         ndir = 75
         # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
         # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
@@ -751,7 +751,7 @@ def print_rc_plots(bounds, name, obj, dir=0):
                 xi[0] = x[i]
                 xi[1] = y[j]
                 FM[i,j] = obj.model.predict_values(np.atleast_2d(xi))
-                FT[i,j] = trueFunc(np.atleast_2d(xi))
+                # FT[i,j] = trueFunc(np.atleast_2d(xi))
                 F[i,j]  = obj.evaluate(xi, bounds, dir) #TODO: ADD DIR
         cs = plt.contourf(Y, X, F, levels = np.linspace(np.min(F), 0., 25))
         plt.colorbar(cs)
@@ -773,15 +773,15 @@ def print_rc_plots(bounds, name, obj, dir=0):
         plt.savefig(f"{name}_rc_2d.pdf")    
         plt.clf()
 
-        Z = -abs(FM-FT)
-        cs = plt.contourf(Y, X, Z, levels = 40)
-        plt.colorbar(cs, aspect=20, label = r"$|\hat{f}(\mathbf{x}) - f(\mathbf{x})|$")
-        plt.xlabel(r"$x_1$")
-        plt.ylabel(r"$x_2$")
-        #plt.legend(loc=1)
-        plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
-        plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
-        plt.plot(y[target[0]], x[target[1]], 'go')
-        plt.savefig(f"{name}_err_2d.pdf", bbox_inches="tight")
-        plt.clf()
-        import pdb; pdb.set_trace()
+        # Z = -abs(FM-FT)
+        # cs = plt.contourf(Y, X, Z, levels = 40)
+        # plt.colorbar(cs, aspect=20, label = r"$|\hat{f}(\mathbf{x}) - f(\mathbf{x})|$")
+        # plt.xlabel(r"$x_1$")
+        # plt.ylabel(r"$x_2$")
+        # #plt.legend(loc=1)
+        # plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
+        # plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
+        # plt.plot(y[target[0]], x[target[1]], 'go')
+        # plt.savefig(f"{name}_err_2d.pdf", bbox_inches="tight")
+        # plt.clf()
+        # import pdb; pdb.set_trace()

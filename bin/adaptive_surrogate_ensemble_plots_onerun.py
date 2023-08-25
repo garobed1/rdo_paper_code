@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys, os
 import copy
 import pickle
@@ -20,7 +22,12 @@ from smt.sampling_methods import LHS
 title = sys.argv[1]
 
 "adding comm line option to double x axis for gradient models"
+title2 = None
 fac = 1.0
+if len(sys.argv) > 2:
+    fac = sys.argv[2]
+if len(sys.argv) > 3:
+    title2 = sys.argv[3]
 
 if not os.path.isdir(title):
     os.mkdir(title)
@@ -28,6 +35,20 @@ if not os.path.isdir(title):
 prob = title.split("_")[-2]
 plt.rcParams['font.size'] = '16'
 
+if(title2):
+    
+    with open(f'{title2}/modelf.pickle', 'rb') as f:
+        modelft = pickle.load(f)
+    with open(f'{title2}/err0rms.pickle', 'rb') as f:
+        err0rmst = pickle.load(f)
+    with open(f'{title2}/err0mean.pickle', 'rb') as f:
+        err0meant = pickle.load(f)
+    with open(f'{title2}/hist.pickle', 'rb') as f:
+        histt = pickle.load(f)
+    with open(f'{title2}/errhrms.pickle', 'rb') as f:
+        errhrmst = pickle.load(f)
+    with open(f'{title2}/errhmean.pickle', 'rb') as f:
+        errhmeant = pickle.load(f)
 
 # Adaptive Data
 with open(f'{title}/modelf.pickle', 'rb') as f:
@@ -63,73 +84,121 @@ except:
     errkmean = None
     print("no lhs")
 
+# Concatenate lists
+xk = []
+fk = []
+gk = []
+ekr = []
+ekm = []
+mf = []
+e0r = []
+e0m = []
+hi = []
+ehr = []
+ehm = []
+if(title2):
+    mft = []
+    e0rt = []
+    e0mt = []
+    hit = []
+    ehrt = []
+    ehmt = []
+nprocs = len(modelf)
+for i in range(nprocs):
+    try:
+        xk = xk + xtrainK[i][:]
+        fk = fk + ftrainK[i][:]
+        gk = gk + gtrainK[i][:]
+    except:
+        print("no")
+    # ekr = ekr + errkrms[i][:]
+    # ekm = ekm + errkmean[i][:]
+    mf = mf + modelf[i][:]
+    e0r = e0r + err0rms[i]
+    e0m = e0m + err0mean[i]
+    hi = hi + hist[i][:]
+    ehr = ehr + errhrms[i][:]
+    ehm = ehm + errhmean[i][:]
+    if(title2):
+        mft =  mft  + modelft[i][:]
+        e0rt = e0rt + err0rmst[i]
+        e0mt = e0mt + err0meant[i]
+        hit =  hit  + histt[i][:]
+        ehrt = ehrt + errhrmst[i][:]
+        ehmt = ehmt + errhmeant[i][:]
 
-dim = modelf.training_points[None][0][0].shape[1]
+nruns = len(mf)
+dim = mf[0].training_points[None][0][0].shape[1]
+
 
 # Problem Settings
 trueFunc = GetProblem(prob, dim)
 
 
-
-ehr = [err0rms] + errhrms 
-ehm = [err0mean] + errhmean
-
+for i in range(nruns):
+    ehr[i] = [e0r[i]] + ehr[i] #[errf] #errh
+    ehm[i] = [e0m[i]] + ehm[i]
+    if(title2):
+        ehrt[i] = [e0rt[i]] + ehrt[i] #[errf] #errh
+        ehmt[i] = [e0mt[i]] + ehmt[i]
+# ekr = [ekr]
+# ekm = [ekm]
 
 # Plot Error History
-iters = len(ehr)
-with open(f'{title}/intervals.pickle', 'rb') as f:
-    intervals = pickle.load(f)
+iters = len(ehr[0])
+if(dim > 3):
+    with open(f'{title}/intervals.pickle', 'rb') as f:
+        intervals = pickle.load(f)
+    #iters = intervals.shape[0] + 1
+else:
+    intervals = np.arange(iters)
 
+# itersk = len(ekr[0])
+if(title2):
+    iterst = len(ehrt[0])
+    if(iterst < iters):
+        iters = iterst
 
 samplehist = np.zeros(iters, dtype=int)
 # samplehistk = np.zeros(itersk, dtype=int)
 
-samplehist[0] = hist[0][0][0][0].shape[0] #training_points 
+samplehist[0] = hi[0][0][0][0].shape[0] #training_points 
 for i in range(1, iters-1):
     samplehist[i] = samplehist[i-1] + (intervals[1] - intervals[0])
-samplehist[iters-1] = modelf.training_points[None][0][0].shape[0]
+samplehist[iters-1] = mf[0].training_points[None][0][0].shape[0]
+# for i in range(itersk):
+#     samplehistk[i] = len(xk[i])
 
+if(title2):
+    xt = np.linspace(0, samplehist[-1]-samplehist[0], iters, dtype=int)
+    for i in range(nruns):
+        ehrt[i] = [ehrt[i][j] for j in xt]
+        ehmt[i] = [ehmt[i][j] for j in xt]
 
+# Average out runs
+ehrm = np.zeros(iters)
+ehmm = np.zeros(iters)
+ehsm = np.zeros(iters) 
+# ekrm = np.zeros(itersk)
+# ekmm = np.zeros(itersk)
+# eksm = np.zeros(itersk)
+if(title2):
+    ehrmt = np.zeros(iters)
+    ehmmt = np.zeros(iters)
+    ehsmt = np.zeros(iters) 
 
+for i in range(nruns):
+    ehrm += np.array(ehr[i]).T[0]/nruns
+    ehmm += np.array(ehm[i]).T[0][0]/nruns
+    ehsm += np.array(ehm[i]).T[0][1]/nruns
+    # ekrm += np.array(ekr[i]).T[0]/nruns
+    # ekmm += np.array(ekm[i]).T[0][0]/nruns
+    # eksm += np.array(ekm[i]).T[0][1]/nruns
+    if(title2):
+        ehrmt += np.array(ehrt[i]).T[0]/nruns
+        ehmmt += np.array(ehmt[i]).T[0][0]/nruns
+        ehsmt += np.array(ehmt[i]).T[0][1]/nruns
 
-colordict = {
-    "POU":"b",
-    "POUHessian":"b",
-    "GEK":"r",
-    "GEKPLS":"r",
-    "GEK1D":"r",
-    "KRG":"g",
-    "Kriging":"g",
-    "PCEStrict":"c",
-}
-
-namedict = {
-    "POUHessian":"POU",
-    "GEKPLS":"GEK",
-    "GEK1D":"GEK",
-    "Kriging":"KRG",
-    "PCEStrict":"SC",
-}
-
-adaptdict = {
-    "hess":"Hess",
-    "sfcv":"SFCVT",
-    "no_adapt":" "
-}
-
-adaptdict2 = {
-    "hess":"-",
-    "sfcv":"-.",
-    "no_adapt":"-"
-}
-
-facdict = {
-    "POUHessian":fac,
-    "GEKPLS":fac,
-    "GEK1D":fac,
-    "Kriging":1,
-    "PCEStrict":1,
-}
 
 if(dim == 1):
     # plt.clf()
@@ -152,7 +221,7 @@ if(dim == 1):
     F = np.zeros([ndir])
     Fh = np.zeros([ndir])
     TF = np.zeros([ndir])
-    pmod = modelf
+    pmod = mf[0]
     for i in range(ndir):
         xi = np.zeros([1,1])
         xi[0] = x[i]
@@ -245,7 +314,7 @@ if(dim == 2):
     F  = np.zeros([ndir, ndir])
     FK  = np.zeros([ndir, ndir])
     TF = np.zeros([ndir, ndir])
-    pmod = modelf
+    pmod = mf[0]
     for i in range(ndir):
         for j in range(ndir):
             xi = np.zeros([1,2])
@@ -305,8 +374,10 @@ if(dim == 2):
 #NRMSE
 ax = plt.gca()
 plt.loglog(samplehist, ehrm, "b-", label=f'Adaptive')
-
-plt.xlabel("Sampling")
+# plt.loglog(samplehistk, ekrm, 'k-', label='LHS')
+if(title2):
+    plt.loglog(samplehist, ehrmt, "r-", label=f'TEAD NRMSE')
+plt.xlabel("Number of samples")
 plt.ylabel("NRMSE")
 plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehrm[0])))
 plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehrm[-1])))

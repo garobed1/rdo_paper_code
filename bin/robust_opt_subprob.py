@@ -1,40 +1,70 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import beta
+import importlib, shutil
 import openmdao.api as om
-from scratch.stat_comp_comp import StatCompComponent
+from uq_comp.stat_comp_comp import StatCompComponent
 from optimization.opt_subproblem import SequentialFullSolve
 from optimization.opt_trust_uncertain import UncertainTrust
-from surrogate.pougrad import POUSurrogate, POUHessian
+from surrogate.pougrad import POUHessian
 from collections import OrderedDict
 import os, copy
-
-"""
-run a mean plus variance optimization over the 1D-1D test function, pure LHS
-for now using the subproblem idea
-"""
-
-# from optimization.optimizers import optimize
-from pyoptsparse import Optimization, SLSQP
 from functions.problem_picker import GetProblem
-from utils.error import stat_comp
-from optimization.robust_objective import RobustSampler, CollocationSampler
+from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from optimization.defaults import DefaultOptOptions
+import argparse
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 plt.rcParams['font.size'] = '16'
 
-name = 'betaex_trust_sc_demo'
-
-if not os.path.isdir(f"{name}"):
-    os.mkdir(f"{name}")
-
-ref_strategy = 2
 """
-0: Flat refinement
-1: Refine by first-order proximity to 0
-2: Refine by inexact gradient condition (Conn, Kouri papers)
+run a mean plus variance optimization over the 1D-1D test function, test out the sampling techniques
 """
 
+
+# parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('-o', '--optfile', action='store', default='ouu_opt_settings.py', help = 'python file containing settings for optimization parameters')
+parser.add_argument('-s', '--samplingfile', action='store', default='ouu_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
+
+args = parser.parse_args()
+osetfile = args.optfile
+ssetfile = args.samplingfile
+
+
+# import settings from given config files
+root = os.getcwd()
+# optimization imports
+optsplit = osetfile.split(sep='/')
+optuse = '.'.join(optsplit)
+if optuse.endswith('.py'):
+    optsuse = optuse.split('.')[:-1]
+    optuse = '.'.join(optuse)
+oset = importlib.import_module(optuse)
+title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
+if(oset.path == None):
+    path = "."
+else:
+    path = oset.path
+
+# adaptive sampling imports, ignore path from here since it should be in oset
+samsplit = ssetfile.split(sep='/')
+suse = '.'.join(samsplit)
+if suse.endswith('.py'):
+    suse = suse.split('.')[:-1]
+    suse = '.'.join(suse)
+sset = importlib.import_module(suse)
+
+if rank == 0:
+    if not os.path.isdir(f"/{root}/{path}/{title}"):
+        os.mkdir(f"/{root}/{path}/{title}")
+    shutil.copy(f"./{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
+    shutil.copy(f"./{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
 
 ##### surrogate #####
 use_truth_to_train = True #NEW, ONLY IF USING SURR
@@ -70,12 +100,17 @@ N_t = 5000*u_dim
 # N_t = 500*u_dim
 N_m = 2
 jump = 100
-##### Collocation UQ #####
-use_collocation = True #NEW, USE DENSE COLLOCATION
+sample_type = 'Adaptive'
+
+##### Collocation UQ Parameters #####
 scN_t = 48
 scN_m = 2
 scjump = 1 # stochastic collocation jump
 
+
+##### Adaptive Surrogate UQ Parameters #####
+RC0 = None
+max_batch = sset.max_batch
 
 ##### plotting #####
 print_plots = True
@@ -84,6 +119,30 @@ print_plots = True
 dim = 2
 prob = 'betatestex'
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
+
+# adaptive sampling options
+options = DefaultOptOptions
+options["local"] = sset.local
+options["localswitch"] = set.localswitch
+options["errorcheck"] = None
+options["multistart"] = set.mstarttype
+options["lmethod"] = set.opt
+try:
+    options["method"] = set.gopt
+except:
+    pass
+
+
+
+
+
+
+
+
+
+
+
+
 
 ############################
 #### SCRIPT BEGINS HERE ####
@@ -132,10 +191,10 @@ max_outer = 20
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 
-# start distinguishing between model and truth here
 
 
-if(use_collocation):
+### SAMPLING STRATEGY ###
+if(sample_type == 'SC'):
     jump = scjump
     N_t = scN_t
     N_m = scN_m
@@ -143,17 +202,24 @@ if(use_collocation):
                           name='truth', 
                           xlimits=xlimits, 
                           probability_functions=pdfs)
-    # sampler_t = RobustSampler(np.array([x_init]), N=5000, 
-    #                       name='truth', 
-    #                       xlimits=xlimits, 
-    #                       probability_functions=pdfs, 
-    #                       retain_uncertain_points=retain_uncertain_points)
     sampler_m = CollocationSampler(np.array([x_init]), N=N_m, 
                           name='model', 
                           xlimits=xlimits, 
                           probability_functions=pdfs,
                           external_only=external_only)
-
+elif(sample_type == 'Adaptive'):
+    sampler_t = RobustSampler(np.array([x_init]), N=N_t, 
+                          name='truth', 
+                          xlimits=xlimits, 
+                          probability_functions=pdfs, 
+                          retain_uncertain_points=retain_uncertain_points)
+    sampler_m = AdaptiveSampler(np.array([x_init]), N=N_m, 
+                          name='model', 
+                          criteria=RC0,
+                          max_batch=max_batch,
+                          xlimits=xlimits, 
+                          probability_functions=pdfs, 
+                          retain_uncertain_points=retain_uncertain_points)
 else:
     sampler_t = RobustSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
@@ -167,8 +233,10 @@ else:
                           retain_uncertain_points=retain_uncertain_points,
                           external_only=external_only)
 
-### TRUTH ###
 
+
+
+### TRUTH ###
 probt = om.Problem()
 probt.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probt.model.dvs.add_output("x_d", val=x_init)
@@ -256,7 +324,7 @@ if trust_region_bound == 1:
     # probm.model.trust.set_center(zk)
     # probm.model.connect("x_d", "trust.x_d")
 
-# if 2, handle with changing dv bounds internally
+# if 2, handle with changing dv bounds internally DEFAULT BEHAVIOR USE THIS
 
 
 probm.model.add_objective("stat.musigma")
@@ -270,13 +338,13 @@ if trust_region_bound: #anything but 0
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
                                     inexact_gradient_only=inexact_gradient_only,
-                                    ref_strategy=ref_strategy)
+                                    ref_strategy=oset.ref_strategy)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
-                                    ref_strategy=ref_strategy)
+                                    ref_strategy=oset.ref_strategy)
 sub_optimizer.setup_optimization()
 # ndir = 150
 # x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)

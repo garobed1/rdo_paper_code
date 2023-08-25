@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys, os
 import shutil
 import copy
@@ -96,7 +98,7 @@ elif len(sys.argv) > 2:
 
 else:
     # All variables not initialized come from this import
-    import results_settings as set
+    import adaptive_surrogate_ensemble_settings as set
     # Generate results folder and list of inputs
     title = f"{set.header}_{set.prob}_{set.dim}D"
     if(set.path == None):
@@ -106,7 +108,7 @@ else:
     if rank == 0:
         if not os.path.isdir(f"{path}/{title}"):
             os.mkdir(f"{path}/{title}")
-        shutil.copy("./results_settings.py", f"{path}/{title}/settings.py")
+        shutil.copy("./adaptive_surrogate_ensemble_settings.py", f"{path}/{title}/settings.py")
 
 Nruns = size*set.runs_per_proc
 # Fan out parallel cases

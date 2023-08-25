@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys, os
 import copy
 import pickle
@@ -20,12 +22,7 @@ from smt.sampling_methods import LHS
 title = sys.argv[1]
 
 "adding comm line option to double x axis for gradient models"
-title2 = None
-fac = 1.0
-if len(sys.argv) > 2:
-    fac = sys.argv[2]
-if len(sys.argv) > 3:
-    title2 = sys.argv[3]
+fac = 2.0
 
 if not os.path.isdir(title):
     os.mkdir(title)
@@ -33,20 +30,6 @@ if not os.path.isdir(title):
 prob = title.split("_")[-2]
 plt.rcParams['font.size'] = '16'
 
-if(title2):
-    
-    with open(f'{title2}/modelf.pickle', 'rb') as f:
-        modelft = pickle.load(f)
-    with open(f'{title2}/err0rms.pickle', 'rb') as f:
-        err0rmst = pickle.load(f)
-    with open(f'{title2}/err0mean.pickle', 'rb') as f:
-        err0meant = pickle.load(f)
-    with open(f'{title2}/hist.pickle', 'rb') as f:
-        histt = pickle.load(f)
-    with open(f'{title2}/errhrms.pickle', 'rb') as f:
-        errhrmst = pickle.load(f)
-    with open(f'{title2}/errhmean.pickle', 'rb') as f:
-        errhmeant = pickle.load(f)
 
 # Adaptive Data
 with open(f'{title}/modelf.pickle', 'rb') as f:
@@ -82,122 +65,77 @@ except:
     errkmean = None
     print("no lhs")
 
-# Concatenate lists
-xk = []
-fk = []
-gk = []
-ekr = []
-ekm = []
-mf = []
-e0r = []
-e0m = []
-hi = []
-ehr = []
-ehm = []
-if(title2):
-    mft = []
-    e0rt = []
-    e0mt = []
-    hit = []
-    ehrt = []
-    ehmt = []
-nprocs = len(modelf)
-for i in range(nprocs):
-    try:
-        xk = xk + xtrainK[i][:]
-        fk = fk + ftrainK[i][:]
-        gk = gk + gtrainK[i][:]
-    except:
-        print("no")
-    # ekr = ekr + errkrms[i][:]
-    # ekm = ekm + errkmean[i][:]
-    mf = mf + modelf[i][:]
-    e0r = e0r + err0rms[i]
-    e0m = e0m + err0mean[i]
-    hi = hi + hist[i][:]
-    ehr = ehr + errhrms[i][:]
-    ehm = ehm + errhmean[i][:]
-    if(title2):
-        mft =  mft  + modelft[i][:]
-        e0rt = e0rt + err0rmst[i]
-        e0mt = e0mt + err0meant[i]
-        hit =  hit  + histt[i][:]
-        ehrt = ehrt + errhrmst[i][:]
-        ehmt = ehmt + errhmeant[i][:]
 
-nruns = len(mf)
-dim = mf[0].training_points[None][0][0].shape[1]
-
+dim = modelf.training_points[None][0][0].shape[1]
 
 # Problem Settings
 trueFunc = GetProblem(prob, dim)
 
 
-for i in range(nruns):
-    ehr[i] = [e0r[i]] + ehr[i] #[errf] #errh
-    ehm[i] = [e0m[i]] + ehm[i]
-    if(title2):
-        ehrt[i] = [e0rt[i]] + ehrt[i] #[errf] #errh
-        ehmt[i] = [e0mt[i]] + ehmt[i]
-# ekr = [ekr]
-# ekm = [ekm]
+
+ehr = [err0rms] + errhrms 
+ehm = [err0mean] + errhmean
+
 
 # Plot Error History
-iters = len(ehr[0])
-if(dim > 3):
-    with open(f'{title}/intervals.pickle', 'rb') as f:
-        intervals = pickle.load(f)
-    #iters = intervals.shape[0] + 1
-else:
-    intervals = np.arange(iters)
+iters = len(ehr)
+with open(f'{title}/intervals.pickle', 'rb') as f:
+    intervals = pickle.load(f)
 
-# itersk = len(ekr[0])
-if(title2):
-    iterst = len(ehrt[0])
-    if(iterst < iters):
-        iters = iterst
 
 samplehist = np.zeros(iters, dtype=int)
 # samplehistk = np.zeros(itersk, dtype=int)
 
-samplehist[0] = hi[0][0][0][0].shape[0] #training_points 
-for i in range(1, iters-1):
-    samplehist[i] = samplehist[i-1] + (intervals[1] - intervals[0])
-samplehist[iters-1] = mf[0].training_points[None][0][0].shape[0]
-# for i in range(itersk):
-#     samplehistk[i] = len(xk[i])
-
-if(title2):
-    xt = np.linspace(0, samplehist[-1]-samplehist[0], iters, dtype=int)
-    for i in range(nruns):
-        ehrt[i] = [ehrt[i][j] for j in xt]
-        ehmt[i] = [ehmt[i][j] for j in xt]
-
-# Average out runs
-ehrm = np.zeros(iters)
-ehmm = np.zeros(iters)
-ehsm = np.zeros(iters) 
-# ekrm = np.zeros(itersk)
-# ekmm = np.zeros(itersk)
-# eksm = np.zeros(itersk)
-if(title2):
-    ehrmt = np.zeros(iters)
-    ehmmt = np.zeros(iters)
-    ehsmt = np.zeros(iters) 
-
-for i in range(nruns):
-    ehrm += np.array(ehr[i]).T[0]/nruns
-    ehmm += np.array(ehm[i]).T[0][0]/nruns
-    ehsm += np.array(ehm[i]).T[0][1]/nruns
-    # ekrm += np.array(ekr[i]).T[0]/nruns
-    # ekmm += np.array(ekm[i]).T[0][0]/nruns
-    # eksm += np.array(ekm[i]).T[0][1]/nruns
-    if(title2):
-        ehrmt += np.array(ehrt[i]).T[0]/nruns
-        ehmmt += np.array(ehmt[i]).T[0][0]/nruns
-        ehsmt += np.array(ehmt[i]).T[0][1]/nruns
+# samplehist[0] = hist[0][0][0].shape[0] #training_points 
+for i in intervals:
+    # samplehist[i] = samplehist[i-1] + (intervals[1] - intervals[0])
+    samplehist[i] = hist[i][0][0].shape[0]
+samplehist[iters-1] = modelf.training_points[None][0][0].shape[0]
 
 
+
+
+colordict = {
+    "POU":"b",
+    "POUHessian":"b",
+    "GEK":"r",
+    "GEKPLS":"r",
+    "GEK1D":"r",
+    "KRG":"g",
+    "Kriging":"g",
+    "PCEStrict":"c",
+}
+
+namedict = {
+    "POUHessian":"POU",
+    "GEKPLS":"GEK",
+    "GEK1D":"GEK",
+    "Kriging":"KRG",
+    "PCEStrict":"SC",
+}
+
+adaptdict = {
+    "hess":"Hess",
+    "sfcv":"SFCVT",
+    "no_adapt":" "
+}
+
+adaptdict2 = {
+    "hess":"-",
+    "sfcv":"-.",
+    "no_adapt":"-"
+}
+
+facdict = {
+    "POUHessian":fac,
+    "GEKPLS":fac,
+    "GEK1D":fac,
+    "Kriging":1,
+    "PCEStrict":1,
+}
+
+mname = modelf.name
+adapt = 'hess'
 if(dim == 1):
     # plt.clf()
     # nt0 = samplehist[0]
@@ -219,7 +157,7 @@ if(dim == 1):
     F = np.zeros([ndir])
     Fh = np.zeros([ndir])
     TF = np.zeros([ndir])
-    pmod = mf[0]
+    pmod = modelf
     for i in range(ndir):
         xi = np.zeros([1,1])
         xi[0] = x[i]
@@ -312,7 +250,7 @@ if(dim == 2):
     F  = np.zeros([ndir, ndir])
     FK  = np.zeros([ndir, ndir])
     TF = np.zeros([ndir, ndir])
-    pmod = mf[0]
+    pmod = modelf
     for i in range(ndir):
         for j in range(ndir):
             xi = np.zeros([1,2])
@@ -371,98 +309,90 @@ if(dim == 2):
 
 #NRMSE
 ax = plt.gca()
-plt.loglog(samplehist, ehrm, "b-", label=f'Adaptive')
-# plt.loglog(samplehistk, ekrm, 'k-', label='LHS')
-if(title2):
-    plt.loglog(samplehist, ehrmt, "r-", label=f'TEAD NRMSE')
-plt.xlabel("Number of samples")
+# plt.loglog(samplehist, ehr, "b-", label=f'Adaptive')
+ax.semilogy(samplehist*facdict[mname], 
+                ehr, 
+                f"{colordict[mname]}{adaptdict2[adapt]}", 
+                label=f'{namedict[mname]} {adaptdict[adapt]}')
+try:
+    if(f'{namedict[mname]} LHS' not in lhslist):
+        ax.semilogy(samplehistk[i]*facdict[mname], 
+                    ekr, 
+                    f'{colordict[mname]}--', 
+                    label=f'{namedict[mname]} LHS')
+        lhslist.append(f'{namedict[mname]} LHS')
+except:
+    print("No LHS for this one")
+plt.xlabel("Sampling Effort")
 plt.ylabel("NRMSE")
-plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehrm[0])))
-plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehrm[-1])))
-plt.xticks(ticks=np.arange(min(samplehist), max(samplehist), 40), labels=np.arange(min(samplehist), max(samplehist), 40) )
+plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehr[0])))
+plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehr[-1])))
 plt.grid()
-ax.xaxis.set_minor_formatter(mticker.ScalarFormatter())
-ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
 plt.legend(loc=3)
 plt.savefig(f"{title}/err_nrmse_ensemble.pdf", bbox_inches="tight")
 plt.clf()
 
-ax = plt.gca()
-plt.loglog(samplehist, ehmm, "b-", label='Adaptive' )
-# plt.loglog(samplehistk, ekmm, 'k-', label='LHS')
-plt.xlabel("Number of samples")
-plt.ylabel("Mean Error")
-plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehmm[0])))
-plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehmm[-1])))
-plt.xticks(ticks=np.arange(min(samplehist), max(samplehist), 40), labels=np.arange(min(samplehist), max(samplehist), 40) )
-plt.grid()
-ax.xaxis.set_minor_formatter(mticker.ScalarFormatter())
-ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
 
-plt.legend(loc=3)
-plt.savefig(f"{title}/err_mean_ensemble.pdf", bbox_inches="tight")
-plt.clf()
+# ax = plt.gca()
+# plt.loglog(samplehist, ehs, "b-", label='Adaptive' )
+# # plt.loglog(samplehistk, eksm, 'k-', label='LHS')
+# plt.xlabel("Number of samples")
+# plt.ylabel(r"$\sigma$ Error")
+# plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehs[0])))
+# plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehs[-1])))
+# plt.xticks(ticks=np.arange(min(samplehist), max(samplehist), 40), labels=np.arange(min(samplehist), max(samplehist), 40) )
+# plt.grid()
+# ax.xaxis.set_minor_formatter(mticker.ScalarFormatter())
+# ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
 
-ax = plt.gca()
-plt.loglog(samplehist, ehsm, "b-", label='Adaptive' )
-# plt.loglog(samplehistk, eksm, 'k-', label='LHS')
-plt.xlabel("Number of samples")
-plt.ylabel(r"$\sigma$ Error")
-plt.gca().set_ylim(top=10 ** math.ceil(math.log10(ehsm[0])))
-plt.gca().set_ylim(bottom=10 ** math.floor(math.log10(ehsm[-1])))
-plt.xticks(ticks=np.arange(min(samplehist), max(samplehist), 40), labels=np.arange(min(samplehist), max(samplehist), 40) )
-plt.grid()
-ax.xaxis.set_minor_formatter(mticker.ScalarFormatter())
-ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
+# plt.legend(loc=3)
+# plt.savefig(f"{title}/err_stdv_ensemble.pdf", bbox_inches="tight")
+# plt.clf()
 
-plt.legend(loc=3)
-plt.savefig(f"{title}/err_stdv_ensemble.pdf", bbox_inches="tight")
-plt.clf()
+# trx = modelf[0].training_points[None][0][0]
+# trf = modelf[0].training_points[None][0][1]
+# m, n = trx.shape
+# normal = np.ones(dim)
+# normal /= np.linalg.norm(normal)
 
-trx = mf[0].training_points[None][0][0]
-trf = mf[0].training_points[None][0][1]
-m, n = trx.shape
-normal = np.ones(dim)
-normal /= np.linalg.norm(normal)
+# planedists = np.zeros(m)
+# for i in range(m):
+#     planedists[i] = abs(np.dot(trx[i,:],normal))
 
-planedists = np.zeros(m)
-for i in range(m):
-    planedists[i] = abs(np.dot(trx[i,:],normal))
+# mk = copy.deepcopy(mf[0])
+# mk.set_training_values(xk[-1], fk[-1])
+# if(isinstance(mk, GEKPLS) or isinstance(mk, POUSurrogate) or isinstance(mk, POUHessian)):
+#     for j in range(dim):
+#         mk.set_training_derivatives(xk[-1], gk[-1][:,j:j+1], j)
+# mk.train()
+# trxk = mk.training_points[None][0][0]
+# trfk = mk.training_points[None][0][1]
+# mk.options.update({"print_global":False})
+# mf[0].options.update({"print_global":False})
+# pmod = mf[0]
 
-mk = copy.deepcopy(mf[0])
-mk.set_training_values(xk[-1], fk[-1])
-if(isinstance(mk, GEKPLS) or isinstance(mk, POUSurrogate) or isinstance(mk, POUHessian)):
-    for j in range(dim):
-        mk.set_training_derivatives(xk[-1], gk[-1][:,j:j+1], j)
-mk.train()
-trxk = mk.training_points[None][0][0]
-trfk = mk.training_points[None][0][1]
-mk.options.update({"print_global":False})
-mf[0].options.update({"print_global":False})
-pmod = mf[0]
-
-#snapshot is proc, iteration
-#snapshot = [30, 60] 
-snapshot = 0
-if(snapshot):
-    trx = hi[snapshot[0]][snapshot[1]][0][0]
-    trf = hi[snapshot[0]][snapshot[1]][0][1]
-    trg = np.zeros_like(trx)
-    if(isinstance(mf[0], GEKPLS) or isinstance(mf[0], POUSurrogate) or isinstance(mf[0], POUHessian)):
-        for j in range(dim):
-            trg[:,j:j+1] = hi[snapshot[0]][snapshot[1]][j+1][1]
-    m, n = trx.shape
+# #snapshot is proc, iteration
+# #snapshot = [30, 60] 
+# snapshot = 0
+# if(snapshot):
+#     trx = hi[snapshot[0]][snapshot[1]][0][0]
+#     trf = hi[snapshot[0]][snapshot[1]][0][1]
+#     trg = np.zeros_like(trx)
+#     if(isinstance(mf[0], GEKPLS) or isinstance(mf[0], POUSurrogate) or isinstance(mf[0], POUHessian)):
+#         for j in range(dim):
+#             trg[:,j:j+1] = hi[snapshot[0]][snapshot[1]][j+1][1]
+#     m, n = trx.shape
 
 
-    pmod = copy.deepcopy(mf[0])
-    pmod.set_training_values(trx, trf)
-    if(isinstance(mk, GEKPLS) or isinstance(mk, POUSurrogate) or isinstance(mk, POUHessian)):
-        for j in range(dim):
-            pmod.set_training_derivatives(trx, trg[:,j:j+1], j)
-    pmod.train()
-    pmod.options.update({"print_global":False})
+#     pmod = copy.deepcopy(mf[0])
+#     pmod.set_training_values(trx, trf)
+#     if(isinstance(mk, GEKPLS) or isinstance(mk, POUSurrogate) or isinstance(mk, POUHessian)):
+#         for j in range(dim):
+#             pmod.set_training_derivatives(trx, trg[:,j:j+1], j)
+#     pmod.train()
+#     pmod.options.update({"print_global":False})
 
-    import pdb; pdb.set_trace()
+#     import pdb; pdb.set_trace()
 
 # # Plot points
 

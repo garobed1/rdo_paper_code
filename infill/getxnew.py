@@ -157,6 +157,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
                     err = full_error(model, func, xdata=xdata, fdata=fdata)
                     errh.append(err[0])
                     errh2.append(err[1:])
+                # import pdb; pdb.set_trace()
                     #print("yes")
 
 

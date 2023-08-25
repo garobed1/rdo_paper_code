@@ -4,6 +4,7 @@ from collections import defaultdict
 from utils.error import stat_comp, _gen_var_lists
 from scipy.special import legendre, hermite, jacobi, roots_legendre, roots_hermite, roots_jacobi
 from smt.sampling_methods import LHS
+from infill.getxnew import adaptivesampling
 
 from smt.utils.options_dictionary import OptionsDictionary
 
@@ -43,6 +44,7 @@ class RobustSampler():
         self.func_computed = False #do we have function data at the samples?
         self.grad_computed = False #do we have gradient data at the samples?
         self.stop_generating = True
+        self.func = None #set function for adaptive refinement
 
         self._attribute_reset()
 
@@ -264,21 +266,24 @@ class RobustSampler():
 
         return 1
 
-    def refine_uncertain_points(self, N):
+    def refine_uncertain_points(self, N, func=None):
         """
         Second of two functions that will increment the sampling iteration
         Add more UQ points to the current design. Usually this is nested
 
         N: int or float or list
             generic reference to sampling level, by default just number of points to add to sample
+        func: SMT Function
+            If refinery requires function evaluations (e.g. adaptive sampling), compute from this
         """
         # check if we already have them NOTE: EVEN IF A DIFFERENT NUMBER IS REQUESTED FOR NOW
         if self.has_points and N is None:
             print(f"{self.options['name']} Iter {self.iter_max}: No refinement requested, no points generated")
             return
 
+        self.func = func
         tx = self._refine_sample(N)
-        
+
         # archive previous dataset
         self._internal_save_state(refine=True)
         
@@ -528,7 +533,9 @@ class CollocationSampler(RobustSampler):
 
         if isinstance(N, int):
             N_add = self.x_u_dim*[N]
-            
+        else:
+            N_add = N
+
         N_new = np.array(N_old) + np.array(N_add)
         N_new = N_new.tolist()
 
@@ -567,6 +574,103 @@ class CollocationSampler(RobustSampler):
             tot = self._recurse_total_points(di+1, N, tot)
 
         return tot
+
+
+
+
+"""
+Sampler object for adaptively sampled surrogate points. Only works for surrogate-based stat comp
+
+Need a refinement criteria object, but we also need the surrogate used in stat comp
+"""
+class AdaptiveSampler(RobustSampler):
+    
+
+
+    def _initialize(self):
+        
+        # run sampler for the first time on creation
+        self.xlimits = self.options["xlimits"]
+
+        # establish criteria
+        self.rcrit = self.options['criteria']
+
+
+    def _declare_options(self):
+        # the criteria contains the model, we should tell stat comp to get its surrogate from this
+        self.options.declare(
+            "criteria",
+            desc="REQUIRED: refinement criteria function for adaptive sampling/infill",
+        )
+
+        self.options.declare(
+            "max_batch",
+            default=1,
+            types=int,
+            desc="maximum allowable batch size",
+        )
+
+        self.options.declare(
+            "full_refine",
+            default=False,
+            types=bool,
+            desc="if true, operate refinement over combined design/uncertain spaces",
+        )
+
+        self.options.declare(
+            "as_options",
+            default=None,
+            desc="options dict for adaptive sampling iterator",
+        )   
+
+
+    # NOTE: Not overriding _new_sample, stick with LHS if resetting
+    # def _new_sample(self, N):
+    #     return tx
+
+    def _refine_sample(self, N):
+        
+        max_batch = self.options['max_batch']
+        as_options = self.options['as_options']
+
+        batch_use = max_batch
+        if N < max_batch:
+            batch_use = N
+
+        #TODO: MORE MUST BE DONE HERE, NEED TO MODIFY REFINECRITERIA TO OPERATE ON LIMITED SPACE
+        bounds = self.xlimits
+        if not self.options['full_refine']:
+            bounds = self.xlimits[self.x_u_ind]
+
+        modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
+
+        # func set in self.func, should not be none
+        if self.func == None:
+            raise ValueError("func not set in AdaptiveSampler")
+
+        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, batch=batch_use, options=as_options)
+
+
+        self.rcrit = rF
+
+
+        # set evaluations internally
+        tx = mf.training_points[None][0][0]
+        tf = mf.training_points[None][0][1]
+        tg = convert_to_smt_grads(mf)
+        self.set_evaluated_func(tf)
+        self.set_evaluated_grad(tg)
+
+
+
+
+        return tx
+
+
+
+
+
+
 
 
 

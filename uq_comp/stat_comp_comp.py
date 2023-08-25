@@ -54,12 +54,12 @@ class StatCompComponent(om.ExplicitComponent):
         self.stat_type = self.options["stat_type"]
         self.pdfs = self.options["pdfs"]
 
-        # check the dimension of the surrogate
-        # if self.surrogate:
-        #     if
+        # Check if the sampler possesses a surrogate object, i.e. AdaptiveSampler
+        if hasattr(self.sampler, "rcrit.model"):
+            self.surrogate = self.sampler.rcrit.model
 
         # inputs
-        self.add_input('x_d', shape=1,
+        self.add_input('x_d', shape=self.sampler.x_d_dim,
                               desc='Current design point')
         
         self.add_output('musigma', shape=1,
@@ -91,9 +91,12 @@ class StatCompComponent(om.ExplicitComponent):
 
         # train the surrogate if available AND we have moved AND we even bothered to generate points
         if self.surrogate and (moved or not self.first_train):
-            # TODO: find a way to add samples
             # Choose between surrogate over just x_u,
             # or build full surrogate, add points successively
+
+            # NOTE: even though AdaptiveSampler trains the model, it won't hurt
+            # to do it again here. Just ensure that AdaptiveSampler updates
+            # current_samples so that we don't make redundant calculations
 
             # actual computation of training data
             xtrain = self.sampler.current_samples['x']
@@ -346,7 +349,7 @@ class StatCompComponent(om.ExplicitComponent):
             else:
                 self.sampler.N += N
             self.jump = N
-            self.sampler.refine_uncertain_points(N)
+            self.sampler.refine_uncertain_points(N, func=self.func) # second argument only works for AdaptiveSampler
 
         # reset training since the design is the same and we haven't moved
         self.first_train = False

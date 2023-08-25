@@ -172,6 +172,7 @@ class HessianRefine(ASCriteria):
 
         y = numer/denom
 
+        
         ans = -abs(y)
 
         """
@@ -195,9 +196,9 @@ class HessianRefine(ASCriteria):
         for i in range(dir):
             ind = self.ntr + i
             work = x - trx[ind]
+            dirdist = np.sqrt(np.dot(work, work)) 
             # ans += 1./(np.dot(work, work) + 1e-10)
-            ans += np.exp(-self.rho*(np.linalg.norm(work)-mindist))
-
+            ans += np.exp(-self.rho*(dirdist+ delta))
         return ans 
 
 
@@ -228,7 +229,7 @@ class HessianRefine(ASCriteria):
             dist = D[0][i] + delta#np.sqrt(D[0][i] + delta)
             ddist = work/D[0][i]
             local = 0.5*innerMatrixProduct(self.H[i], work)*self.dV[i]*Mc[i]
-            dlocal = np.dot(self.H[i], work)*self.dV[i]*self.Mc[i]
+            dlocal = np.dot(self.H[i], work)*self.dV[i]*Mc[i]
             expfac = np.exp(-self.rho*(dist-mindist))
             dexpfac = -self.rho*expfac*ddist
             numer += local*expfac
@@ -239,7 +240,7 @@ class HessianRefine(ASCriteria):
         y = numer/denom
         dy = (denom*dnumer - numer*ddenom)/(denom**2)
 
-        ans = -np.sign(dy)*dy
+        ans = -np.sign(y)*dy
 
         # for batches, loop over already added points to prevent clustering
         for i in range(dir):
@@ -248,11 +249,11 @@ class HessianRefine(ASCriteria):
             #dwork = np.eye(n)
             # d2 = np.dot(work, work)
             # dd2 = 2*work
+            dirdist = np.sqrt(np.dot(work, work)) 
             # term = 1.0/(d2 + 1e-10)
             # ans += -1.0/((d2 + 1e-10)**2)*dd2
-            dwork = work/np.linalg.norm(work)
-            ans += -self.rho*dwork*np.exp(-self.rho*(np.norm(work)-mindist))
-        
+            ddirdist = work/dirdist
+            ans += -self.rho*ddirdist*np.exp(-self.rho*(dirdist+ delta))
         return ans
 
 
