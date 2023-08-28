@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import beta
 import openmdao.api as om
-from scratch.stat_comp_comp import StatCompComponent
+from uq_comp.stat_comp_comp import StatCompComponent
 
 """
 run a mean plus variance optimization over the 1D-1D test function, pure MC

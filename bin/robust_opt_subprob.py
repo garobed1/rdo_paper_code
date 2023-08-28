@@ -66,69 +66,21 @@ if rank == 0:
     shutil.copy(f"./{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
     shutil.copy(f"./{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
 
-##### surrogate #####
-use_truth_to_train = True #NEW, ONLY IF USING SURR
-use_surrogate = False
-full_surrogate = True
-retain_uncertain_points = True
-
-##### design noise idea ##### (not particularly relevant)
-use_design_noise = False #NEW, ONLY IF USING SURR
-design_noise = 0.0
-design_noise_act = 0.0
-
-
-##### trust region #####
-trust_region_bound = 2    #NEW 1: use nonlinear sphere component
-                            #  2: use dv bound constraints instead of nonlinear sphere
-initial_trust_radius = 1.0
-# eta1
-# eta2
-# gamma1
-# gamma2
-
-##### optimization #####
-x_init = 5.
-# gtol 
-# stol
-# xi
-
-##### UQ Parameters #####
-u_dim = 1
-eta_use = 1.0
-N_t = 5000*u_dim
-# N_t = 500*u_dim
-N_m = 2
-jump = 100
-sample_type = 'Adaptive'
-
-##### Collocation UQ Parameters #####
-scN_t = 48
-scN_m = 2
-scjump = 1 # stochastic collocation jump
 
 
 ##### Adaptive Surrogate UQ Parameters #####
 RC0 = None
 max_batch = sset.max_batch
 
-##### plotting #####
-print_plots = True
-
-# set up beta test problem parameters
-dim = 2
-prob = 'betatestex'
-# pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
-
 # adaptive sampling options
 options = DefaultOptOptions
 options["local"] = sset.local
-options["localswitch"] = set.localswitch
+options["localswitch"] = sset.localswitch
 options["errorcheck"] = None
-options["multistart"] = set.mstarttype
-options["lmethod"] = set.opt
+options["multistart"] = sset.mstarttype
+options["lmethod"] = sset.opt
 try:
-    options["method"] = set.gopt
+    options["method"] = sset.gopt
 except:
     pass
 
@@ -147,57 +99,45 @@ except:
 ############################
 #### SCRIPT BEGINS HERE ####
 ############################
+name = oset.name
+print_plots = oset.print_plots
 
-external_only = (use_truth_to_train and use_surrogate) #NEW
-
-func = GetProblem(prob, dim)
+# variables
+u_dim = oset.u_dim
+d_dim = oset.d_dim
+external_only = (oset.use_truth_to_train and oset.use_surrogate) #NEW
+pdfs = oset.pdfs
+t_dim = u_dim + d_dim
+func = GetProblem(oset.prob, t_dim)
 xlimits = func.xlimits
-# start at just one point for now
 
+# uq settings
+use_surrogate = oset.use_surrogate
+full_surrogate = oset.full_surrogate
+retain_uncertain_points = oset.retain_uncertain_points
+eta_use = oset.eta_use
+use_truth_to_train = oset.use_truth_to_train
+ref_strategy = oset.ref_strategy
+
+# start at just one point for now
+x_init = oset.x_init
 
 # optimization
 # args = (func, eta_use)
-xlimits_d = np.zeros([1,2])
-xlimits_d[:,0] = xlimits[1,0]
-xlimits_d[:,1] = xlimits[1,1]
-xlimits_u = np.zeros([u_dim,2])
-xlimits_u[:,1] = xlimits[0,0]
-xlimits_u[:,1] = xlimits[0,1]
-
-# set up surrogates #NOTE: not doing it for truth for now
-msur = None
-if use_surrogate:
-    rscale = 5.5
-    rho = 10 
-    min_contributions = 1e-12
-
-    if(full_surrogate):
-        neval = 1+(dim+2)
-        msur = POUHessian(bounds=xlimits)
-    else:
-        neval = 1+(u_dim+2)
-        msur = POUHessian(bounds=xlimits_u)
-
-    msur.options.update({"rscale":rscale})
-    msur.options.update({"rho":rho})
-    msur.options.update({"neval":neval})
-    msur.options.update({"min_contribution":min_contributions})
-    msur.options.update({"print_prediction":False})
-
-pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
-# pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
-
-max_outer = 20
-opt_settings = {}
-opt_settings['ACC'] = 1e-6
-
-
+opt_settings = oset.opt_settings
+max_outer = oset.max_outer
+trust_region_bound = oset.trust_region_bound
+initial_trust_radius = oset.initial_trust_radius
+inexact_gradient_only = oset.exact_gradient_only
 
 ### SAMPLING STRATEGY ###
+sample_type = oset.sample_type
+N_t = oset.N_t
+N_m = oset.N_m
 if(sample_type == 'SC'):
-    jump = scjump
-    N_t = scN_t
-    N_m = scN_m
+    jump = oset.scjump
+    N_t = oset.scN_t
+    N_m = oset.scN_m
     sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
                           xlimits=xlimits, 
@@ -232,6 +172,37 @@ else:
                           probability_functions=pdfs, 
                           retain_uncertain_points=retain_uncertain_points,
                           external_only=external_only)
+
+# get variable bounds from sampler_t
+xlimits_d = xlimits[sampler_t.x_d_ind]
+xlimits_u = xlimits[sampler_t.x_u_ind]
+
+# set up surrogates #NOTE: not doing it for truth for now
+#TODO: WRITE SURROGATE PICKER AND RC0 PICKER APPS
+msur = None
+if use_surrogate:
+    rscale = 5.5
+    if hasattr(sset, 'rscale'):
+        rscale = sset.rscale
+    rho = 10 
+    if hasattr(sset, 'rho'):
+        rscale = sset.rho
+    min_contributions = 1e-12
+
+    if(full_surrogate):
+        neval = 1+(t_dim+2)
+        msur = POUHessian(bounds=xlimits)
+    else:
+        neval = 1+(u_dim+2)
+        msur = POUHessian(bounds=xlimits_u)
+
+    msur.options.update({"rscale":rscale})
+    msur.options.update({"rho":rho})
+    msur.options.update({"neval":neval})
+    msur.options.update({"min_contribution":min_contributions})
+    msur.options.update({"print_prediction":False})
+
+
 
 
 
@@ -338,13 +309,13 @@ if trust_region_bound: #anything but 0
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
                                     inexact_gradient_only=inexact_gradient_only,
-                                    ref_strategy=oset.ref_strategy)
+                                    ref_strategy=ref_strategy)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
-                                    ref_strategy=oset.ref_strategy)
+                                    ref_strategy=ref_strategy)
 sub_optimizer.setup_optimization()
 # ndir = 150
 # x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)

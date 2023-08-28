@@ -91,7 +91,7 @@ class TaylorRefine(ASCriteria):
             self.tmodel.set_training_derivatives(qmc.scale(trx, self.bounds[:,0], self.bounds[:,1], reverse=True), trg[:,j], j)
 
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]
@@ -110,7 +110,7 @@ class TaylorRefine(ASCriteria):
         return ans 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]
@@ -140,60 +140,6 @@ class TaylorRefine(ASCriteria):
         trx = self.trx
         m, n = trx.shape
 
-        # ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([2])
-        # step = 0.5*np.ones([2])
-        # step[0] += h
-        # ad = self.eval_grad(zero, bounds)
-        # fd1 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # step = 0.5*np.ones([2])
-        # step[1] += h
-        # fd2 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # fd = [fd1[0], fd2[0]]
-        # import pdb; pdb.set_trace()
-
-        # if(n == 1):
-        #     ndir = 75
-        #     # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
-        #     # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
-        #     x = np.linspace(0., 1., ndir)
-        #     F  = np.zeros([ndir]) 
-        #     for i in range(ndir):
-        #         xi = np.zeros([1])
-        #         xi[0] = x[i]
-        #         F[i]  = self.evaluate(xi, bounds, dir=dir)    
-        #     plt.plot(x, F)
-        #     plt.ylim(top=0.1)
-        #     plt.ylim(bottom=np.min(F))
-        #     trxs = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
-        #     plt.plot(trxs[0:-1,0], np.zeros(trxs[0:-1,0].shape[0]), 'bo')
-        #     plt.plot(trxs[-1,0], [0], 'ro')
-        #     plt.savefig("taylor_rc_1d.png")    
-        #     plt.clf()
-        # import pdb; pdb.set_trace()
-
-        # if(n == 2):
-        #     ndir = 75
-        #     # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
-        #     # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
-        #     x = np.linspace(0., 1., ndir)
-        #     y = np.linspace(0., 1., ndir)   
-        #     X, Y = np.meshgrid(x, y)
-        #     F  = np.zeros([ndir, ndir]) 
-        #     for i in range(ndir):
-        #         for j in range(ndir):
-        #             xi = np.zeros([2])
-        #             xi[0] = x[i]
-        #             xi[1] = y[j]
-        #             F[i,j]  = self.evaluate(xi, bounds, dir=dir)    
-        #     cs = plt.contour(Y, X, F, levels = np.linspace(np.min(F), 0., 25))
-        #     plt.colorbar(cs)
-        #     trxs = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
-        #     plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
-        #     plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
-        #     plt.savefig("taylor_rc_2d.png")    
-        #     plt.clf()
 
         sampling = LHS(xlimits=bounds, criterion='m')
         ntries = self.options["multistart"]
@@ -243,7 +189,7 @@ class TaylorExploreRefine(TaylorRefine):
 
         self.options.declare("objective","inv", types=str)
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]
@@ -268,7 +214,7 @@ class TaylorExploreRefine(TaylorRefine):
         return ans 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]
@@ -297,42 +243,6 @@ class TaylorExploreRefine(TaylorRefine):
         
         trx = self.trx
         m, n = trx.shape
-
-        ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([2])
-        # step = 0.5*np.ones([2])
-        # step[0] += h
-        # ad = self.eval_grad(zero, bounds)
-        # fd = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # import pdb; pdb.set_trace()
-
-        # ndir = 75
-        # # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
-        # # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
-        # x = np.linspace(0., 1., ndir)
-        # y = np.linspace(0., 1., ndir)
-
-        # X, Y = np.meshgrid(x, y)
-        # F  = np.zeros([ndir, ndir])
-
-
-        # for i in range(ndir):
-        #     for j in range(ndir):
-        #         xi = np.zeros([2])
-        #         xi[0] = x[i]
-        #         xi[1] = y[j]
-        #         F[i,j]  = self.evaluate(xi, bounds)
-
-        # cs = plt.contour(Y, X, F, levels = np.linspace(-10,10.,25))
-        # plt.colorbar(cs)
-        # trxs = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
-        # plt.plot(trxs[0:-1,0], trxs[0:-1,1], 'bo')
-        # plt.plot(trxs[-1,0], trxs[-1,1], 'ro')
-        # plt.savefig("taylorexp_rc.png")
-
-        # plt.clf()
-
 
 
 

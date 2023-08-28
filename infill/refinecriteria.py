@@ -78,10 +78,12 @@ class ASCriteria():
             desc="number of optimizations to try per point"
             )
 
+
         self.options.update(kwargs)
 
         self.opt = True
         self.condict = () #for constrained optimization
+
 
         self.initialize(self.model)
 
@@ -129,7 +131,29 @@ class ASCriteria():
 
         return x
 
+    def evaluate(self, x, dir=0):
 
+        ans = self._evaluate(x, dir=dir)
+
+        return ans
+    
+    def eval_grad(self, x, dir=0):
+
+        ans = self._eval_grad(x, dir=dir)
+
+        return ans
+
+    def eval_constraint(self, x, dir=0):
+
+        ans = self._eval_constraint(x, dir=dir)
+
+        pass
+
+    def eval_constraint_grad(self, x, dir=0):
+
+        ans = self._eval_constraint_grad(x, dir=dir)
+
+        pass
 
     """
     Overwrite
@@ -146,16 +170,16 @@ class ASCriteria():
     def initialize(self, model=None):
         pass
 
-    def evaluate(self, x, dir=0):
+    def _evaluate(self, x, dir=0):
         pass
 
-    def eval_grad(self, x, dir=0):
+    def _eval_grad(self, x, dir=0):
         pass
 
-    def eval_constraint(self, x, dir=0):
+    def _eval_constraint(self, x, dir=0):
         pass
 
-    def eval_constraint_grad(self, x, dir=0):
+    def _eval_constraint_grad(self, x, dir=0):
         pass
 
     """
@@ -235,7 +259,7 @@ class looCV(ASCriteria):
         self.dminmax = max(mins)
 
     #TODO: This could be a variety of possible LOO-averaging functions
-    def evaluate(self, x, dir=0):
+    def _evaluate(self, x, dir=0):
         
         if(len(x.shape) != 2):
             x = np.array([x])
@@ -255,7 +279,7 @@ class looCV(ASCriteria):
         return ans # to work with optimizers
 
     # if only using local optimization, start the optimizer at the worst LOO point
-    def pre_asopt(self, bounds, dir=0):
+    def _pre_asopt(self, bounds, dir=0):
         t0 = self.model.training_points[None][0][0]
         #import pdb; pdb.set_trace()
         diff = np.zeros(self.ntr)
@@ -269,12 +293,12 @@ class looCV(ASCriteria):
 
         return np.array([t0[ind]]), None
 
-    def post_asopt(self, x, bounds, dir=0):
+    def _post_asopt(self, x, bounds, dir=0):
 
         return x
         
 
-    def eval_constraint(self, x, dir=0):
+    def _eval_constraint(self, x, dir=0):
         t0 = self.model.training_points[None][0][0]
 
         con = np.zeros(self.ntr)
@@ -487,7 +511,7 @@ class HessianFit(ASCriteria):
         self.bad_dirs = opt_dir
         
 
-    def evaluate(self, x, dir=0):
+    def _evaluate(self, x, dir=0):
         
         xc = self.bads[dir]
         xdir = self.bad_dirs[dir]
@@ -521,7 +545,7 @@ class HessianFit(ASCriteria):
 
 
 
-    def pre_asopt(self, bounds, dir=0):
+    def _pre_asopt(self, bounds, dir=0):
         xc = self.bads[dir]
         gc = self.grad[self.bad_list[dir],:]
         eig = self.bad_eigs[dir]
@@ -567,7 +591,7 @@ class HessianFit(ASCriteria):
 
 
 
-    def post_asopt(self, x, bounds, dir=0):
+    def _post_asopt(self, x, bounds, dir=0):
 
         # transform back to regular coordinates
 
@@ -596,7 +620,7 @@ class HessianFit(ASCriteria):
 
         return xeval
 
-    def eval_constraint(self, x, dir=0):
+    def _eval_constraint(self, x, dir=0):
         xc = self.bads[dir]
         xdir = self.bad_dirs[dir]
         trx = self.model.training_points[None][0][0]
@@ -724,7 +748,7 @@ class TEAD(ASCriteria):
         self.bads = bads
         self.bad_nbhd = bad_nbhd
 
-    def post_asopt(self, x, bounds, dir=0):
+    def _post_asopt(self, x, bounds, dir=0):
 
         return self.bads[dir]
 

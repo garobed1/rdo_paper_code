@@ -215,7 +215,7 @@ class AnisotropicRefine(ASCriteria):
                                 np.ones(trx.shape[0]))
 
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]
@@ -283,7 +283,7 @@ class AnisotropicRefine(ASCriteria):
         return ans 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         trf = self.model.training_points[None][0][1]

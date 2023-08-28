@@ -142,7 +142,7 @@ class HessianRefine(ASCriteria):
         
 
     # Assumption is that the quadratic terms are the error
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         try:
             delta = self.model.options["delta"]
@@ -202,7 +202,7 @@ class HessianRefine(ASCriteria):
         return ans 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         try:
             delta = self.model.options["delta"]
@@ -370,7 +370,7 @@ class POUSSA(ASCriteria):
         self.cvmodel = POUCV(pmodel = self.model)
         self.cvmodel.options.update({"pmodel":self.model})
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         m = self.trx.shape[0]
 
@@ -388,7 +388,7 @@ class POUSSA(ASCriteria):
 
         return ans 
 
-    def eval_constraint(self, x, bounds, dir=0):
+    def _eval_constraint(self, x, bounds, dir=0):
         
         m = self.trx.shape[0]
 
@@ -399,7 +399,7 @@ class POUSSA(ASCriteria):
         return y 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         # delta = self.model.options["delta"]
 

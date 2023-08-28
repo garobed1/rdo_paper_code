@@ -87,7 +87,7 @@ class POUSFCVT(ASCriteria):
         self.cvmodel = POUCV(pmodel = self.model)
         self.cvmodel.options.update({"pmodel":self.model})
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
      
         y = self.cvmodel._predict_values(np.array([x]))
@@ -122,18 +122,6 @@ class POUSFCVT(ASCriteria):
         # import pdb; pdb.set_trace()
 
 
-        # ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([2])
-        # step = 0.5*np.ones([2])
-        # step[0] += h
-        # ad = self.eval_grad(zero, bounds)
-        # fd1 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # step = 0.5*np.ones([2])
-        # step[1] += h
-        # fd2 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # fd = [fd1, fd2]
-        # import pdb; pdb.set_trace()
         if(self.options["print_rc_plots"]):
             print_rc_plots(n, bounds, "POUSFCVT", self)
         # import pdb; pdb.set_trace()
@@ -263,7 +251,7 @@ class SFCVT(ASCriteria):
         self.cvsurr.set_training_values(trx_true, abs_err_sc)
         self.cvsurr.train()
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         if(len(x.shape) != 2):
             x = np.array([x])
@@ -301,7 +289,7 @@ class SFCVT(ASCriteria):
         return x
         
 
-    def eval_constraint(self, x, dir=0):
+    def _eval_constraint(self, x, dir=0):
         t0 = qmc.scale(self.model.training_points[None][0][0], self.bounds[:,0], self.bounds[:,1], reverse=True)
 
         con = np.zeros(self.ntr)
@@ -399,7 +387,7 @@ class POUSSA(ASCriteria):
         self.cvmodel = POUCV(pmodel = self.model)
         self.cvmodel.options.update({"pmodel":self.model})
 
-    def evaluate(self, x, bounds, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         
         m = self.trx.shape[0]
 
@@ -417,7 +405,7 @@ class POUSSA(ASCriteria):
 
         return ans 
 
-    def eval_constraint(self, x, bounds, dir=0):
+    def _eval_constraint(self, x, bounds, dir=0):
         
         m = self.trx.shape[0]
 
@@ -428,7 +416,7 @@ class POUSSA(ASCriteria):
         return y 
 
 
-    def eval_grad(self, x, bounds, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         
         # delta = self.model.options["delta"]
 
@@ -481,18 +469,6 @@ class POUSSA(ASCriteria):
         m, n = trx.shape
 
 
-        # ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([2])
-        # step = 0.5*np.ones([2])
-        # step[0] += h
-        # ad = self.eval_grad(zero, bounds)
-        # fd1 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # step = 0.5*np.ones([2])
-        # step[1] += h
-        # fd2 = (self.evaluate(step, bounds) - self.evaluate(zero, bounds))/h
-        # fd = [fd1, fd2]
-        # import pdb; pdb.set_trace()
         if(self.options["print_rc_plots"]):
             if(n == 1):
                 ndir = 75
