@@ -50,12 +50,12 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
     sub_ind = np.arange(0, n).tolist()
     fix_ind = []
     xfix = 0
-    if options['sub_index'] is not None and not isinstance(rcrit.condict, dict):
-        sub_ind = options['sub_index']
+    if rcrit.options['sub_index'] is not None and not isinstance(rcrit.condict, dict):
+        sub_ind = rcrit.options['sub_index']
         m_e = len(sub_ind)
         # grab values for other indices from x_init
         fix_ind = [x for x in np.arange(0, n).tolist() if x not in sub_ind]
-        xfix = x_init[fix_ind]
+        xfix = qmc.scale(np.array([x_init]), bounds[fix_ind,0], bounds[fix_ind,1], reverse=True)#[fix_ind]
 
     def eval_eff(x, bounds, dir):
         x_eff = np.zeros(n)
@@ -97,7 +97,7 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
                     succ = np.full(m, True)
                     for j in range(m):
                         
-                        results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0[j,:])
+                        results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0[j,sub_ind])
                         resx[j,:] = results.x
                         resy[j] = results.fun
                         succ[j] = results.success
@@ -116,33 +116,32 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
                         y0[j] = eval_eff(x0[j], bounds_used, i)
                     ind = np.argmin(y0)
                     x0b = x0[0]
-                    results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0b)
+                    results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0b[sub_ind])
                     rx = results.x
 
                 # perform one optimization
                 else:
                     x0b = x0[0]
-                    results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0b)
+                    results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="local", constraints=rcrit.condict, jac=jac, x0=x0b[sub_ind])
                     rx = results.x
 
             else:
                 results = optimize(eval_eff, args=args, bounds=unit_bounds[sub_ind,:], type="global", constraints=rcrit.condict)
                 rx = results.x
             
-            rx = qmc.scale(np.array([rx]), bounds_used[:,0], bounds_used[:,1])
+            rx = qmc.scale(np.array([rx]), bounds_used[sub_ind,0], bounds_used[sub_ind,1])
             rx = rx[0]
         else:
             rx = None
 
-
-
+        # fixed variables are added back in post_asopt
         xnew.append(rcrit.post_asopt(rx, bounds, dir=i))
 
     return xnew
 
 
 
-def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, x_init=None, options=None):
+def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
 
     count = int(ntr/batch)
     hist = []
@@ -162,7 +161,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, x_init=None, opt
             #x0 = np.zeros([1, dim])
 
             # get the new points
-            xnew = np.array(getxnew(rcrit, bounds, batch, x_init=x_init, options=options))
+            xnew = np.array(getxnew(rcrit, bounds, batch, x_init=rcrit.fix_val, options=options))
             # import pdb; pdb.set_trace()
             # add the new points to the model
             t0 = np.append(t0, xnew, axis=0)

@@ -694,11 +694,14 @@ def print_rc_plots(bounds, name, obj, dir=0):
         # x = np.linspace(bounds[0][0], bounds[0][1], ndir)
         # y = np.linspace(bounds[1][0], bounds[1][1], ndir)
         x = np.linspace(0., 1., ndir)
-        F  = np.zeros([ndir]) 
+        F  = np.zeros([ndir])
+        dim_t = len(obj.sub_ind) + len(obj.fix_ind) 
+        xi = np.zeros([dim_t])
+        xi[obj.fix_ind] = qmc.scale(np.array([obj.fix_val]), obj.bounds[obj.fix_ind,0], obj.bounds[obj.fix_ind,1], reverse=True)
+        # xi[0, obj.fix_ind] = obj.fix_val
         for i in range(ndir):
-            xi = np.zeros([1])
-            xi[0] = x[i]
-            F[i]  = -obj.evaluate(xi, bounds, dir)  #TODO: ADD DIR
+            xi[obj.sub_ind] = x[i]
+            F[i]  = -obj.evaluate(xi, obj.bounds, dir)  #TODO: ADD DIR
         if(obj.ntr == 10):
             obj.scaler = np.max(F)
         obj.scaler = 1.0
@@ -708,11 +711,20 @@ def print_rc_plots(bounds, name, obj, dir=0):
         ax = plt.gca()  
         plt.plot(x, F, label='Criteria')
         plt.xlim(-0.05, 1.05)
-        plt.ylim(top=1.0)
+        # plt.ylim(top=1.0)
         plt.ylim(bottom=-0.015)#np.min(F))
-        trxs = qmc.scale(obj.trx, bounds[:,0], bounds[:,1], reverse=True)
+        trxs = qmc.scale(obj.trx, obj.bounds[:,0], obj.bounds[:,1], reverse=True)
         #plt.plot(trxs[-1,0], [0], 'ro')
-        plt.plot(trxs[0:,0], np.zeros(trxs[0:,0].shape[0]), 'bo', label='Sample Locations')
+        if n == obj.bounds.shape[0]:
+            plt.plot(trxs[0:,0], np.zeros(trxs[0:,0].shape[0]), 'bo', label='Sample Locations')
+        # print only where new points land on refined space
+        else:
+            valids = np.empty([0,dim_t])
+            for k in range(trxs.shape[0]):
+                if trxs[k,obj.fix_ind] == xi[obj.fix_ind]:
+                    valids = np.row_stack((valids, trxs[k]))
+            if valids.shape[0] > 0:
+                plt.plot(valids[:,obj.sub_ind], np.zeros(valids.shape[0]), 'bo', label='Sample Locations')
         plt.legend(loc=0)
         plt.xlabel(r'$x_1$')
         plt.ylabel(r'$\psi_{\mathrm{CV},%i}(x_1)$' % (obj.ntr-10))

@@ -18,6 +18,8 @@ from utils.sutils import convert_to_smt_grads, print_rc_plots
 class POUSFCVT(ASCriteria):
     def __init__(self, model, grad, bounds, **kwargs):
 
+        self.name = 'POUSFCVT'
+
         self.grad = grad
         self.bounds = bounds
 
@@ -155,6 +157,9 @@ SFCVT, Original Unmodified Version for any surrogate
 """
 class SFCVT(ASCriteria):
     def __init__(self, model, grad, bounds, **kwargs):
+
+        self.name = 'SFCVT'
+
         super().__init__(model, **kwargs)
         self.S = None
         self.cvsurr = None # KRG surrogate used to interpolate between cv values
@@ -270,19 +275,8 @@ class SFCVT(ASCriteria):
         mindists = np.sort(squareform(pdist(trx)))
         self.S = 0.5*np.max(mindists[:,1])
 
-        if(self.options["print_rc_plots"]):
-            print_rc_plots(trx.shape[1], bounds, "SFCVT", self)
 
-        sampling = LHS(xlimits=bounds, criterion='m')
-        ntries = self.options["multistart"]
-        if(ntries > 1):
-            xc = sampling(ntries)
-        else: 
-            xc = np.random.rand(n)*(bounds[:,1] - bounds[:,0]) + bounds[:,0]
-            xc = np.array([xc])
-
-
-        return xc, bounds
+        return None, bounds
 
     def post_asopt(self, x, bounds, dir=0):
 

@@ -641,12 +641,14 @@ class AdaptiveSampler(RobustSampler):
         bounds = self.xlimits
         if not self.options['full_refine']:
             bounds = self.xlimits[self.x_u_ind]
+            self.rcrit.set_static(self.x_d_cur)
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
 
         # func set in self.func, should not be none
         if self.func == None:
             raise ValueError("func not set in AdaptiveSampler")
+
 
         mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, batch=batch_use, options=as_options)
 

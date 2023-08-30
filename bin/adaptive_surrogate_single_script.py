@@ -12,7 +12,7 @@ import numpy as np
 from infill.refinecriteria import looCV, HessianFit, TEAD
 from infill.aniso_criteria import AnisotropicRefine
 from infill.taylor_criteria import TaylorRefine, TaylorExploreRefine
-from infill.hess_criteria import HessianRefine, POUSSA
+from infill.hess_criteria import HessianRefine
 from infill.loocv_criteria import POUSFCVT, SFCVT
 from infill.aniso_transform import AnisotropicTransform
 from infill.getxnew import getxnew, adaptivesampling
@@ -134,7 +134,6 @@ if(set.prob != 'shock'):
     if rank == 0:
         xtest = sampling(set.Nerr)
         ftest = trueFunc(xtest)
-
         testdata = [xtest, ftest, intervals]
 
     xtest = comm.bcast(xtest, root=0)

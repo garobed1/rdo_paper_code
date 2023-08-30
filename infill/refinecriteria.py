@@ -26,6 +26,8 @@ class ASCriteria():
         **kwargs : named arguments
             Set of options that can be optionally set; each option must have been declared.
         """
+        self.name = 'Base'
+
         # copy the surrogate model object
         self.model = copy.deepcopy(model)
 
@@ -77,6 +79,12 @@ class ASCriteria():
             types=int,
             desc="number of optimizations to try per point"
             )
+        
+        self.options.declare(
+            "sub_index", 
+            None, 
+            desc="indices of dimensions to refine over, mostly useful for pre and post as"
+            )
 
 
         self.options.update(kwargs)
@@ -84,14 +92,39 @@ class ASCriteria():
         self.opt = True
         self.condict = () #for constrained optimization
 
+        # note that evaluate and eval_grad will behave the same no matter what,
+        # but this will help with multistart and post processing steps
+        dim_t = self.model.training_points[None][0][0].shape[1]
+        self.sub_ind = np.arange(0, dim_t).tolist()
+        self.fix_ind = []
+        self.fix_val = []
+        if self.options['sub_index'] is not None:
+            self.sub_ind = self.options['sub_index']
+            self.fix_ind = [x for x in np.arange(0, dim_t) if x not in self.sub_ind]
+            self.fix_val = [0.]*len(self.fix_ind)
 
         self.initialize(self.model)
 
+    # set static variables if we're only refining over a subspace
+    # do nothing otherwise
+    def set_static(self, x):
+        len_given = x.shape[0]
+        dim_t = len(self.sub_ind) + len(self.fix_ind)
+        dim_r = len(self.fix_ind)
+        if len_given == dim_t:
+            self.fix_val = x[self.fix_ind]
+        elif len_given == dim_r:
+            self.fix_val = x
+        else:
+            ValueError(f'Invalid number of inputs given ({len_given} != total dim {dim_t}, {len_given} != reduced dim {dim_r})')
+
+        return 
 
 
     def pre_asopt(self, bounds, dir=0):
         
         xc, bounds_m = self._pre_asopt(bounds, dir)
+        # NOTE: xc not doing anything here
 
         # ### FD CHECK
         # h = 1e-6
@@ -106,52 +139,67 @@ class ASCriteria():
         # fd = [fd1, fd2]
         # import pdb; pdb.set_trace()
 
+        ### Get Reduced Space
+        dim_r = len(self.sub_ind)
+        bounds_r = bounds[self.sub_ind]
+
         ### Print Criteria Plots
         if(self.options["print_rc_plots"]):
-            print_rc_plots(bounds, "POUHESS", self, dir)
+            print_rc_plots(bounds_r, self.name, self, dir)
 
         ### Multistart
-        sampling = LHS(xlimits=bounds, criterion='m')
+        sampling = LHS(xlimits=bounds_r, criterion='m')
         ntries = self.options["multistart"]
         if(ntries > 1):
-            xc = sampling(ntries)
+            xc_r = sampling(ntries)
         else: 
-            xc = np.random.rand(self.dim)*(bounds[:,1] - bounds[:,0]) + bounds[:,0]
-            xc = np.array([xc])
+            xc_r = np.random.rand(self.dim)*(bounds_r[:,1] - bounds_r[:,0]) + bounds_r[:,0]
+            xc_r = np.array([xc_r])
 
         ### Batches
+
+        ### Return Full Space
+        xc = np.zeros([ntries, bounds.shape[0]])
+        xc[:,self.sub_ind] = xc_r
+        if len(self.sub_ind) != bounds.shape[0]:
+            xc[:, self.fix_ind] = self.fix_val
 
         return xc, bounds_m
 
     def post_asopt(self, x, bounds, dir=0):
 
-        x = self._post_asopt(x, bounds, dir)
+        ### Return Full Space
+        xe = np.zeros([bounds.shape[0]])
+        xe[self.sub_ind] = x
+        if len(self.sub_ind) != bounds.shape[0]:
+            xe[self.fix_ind] = self.fix_val
+
+        x = self._post_asopt(xe, bounds, dir)
 
         self.trx = np.append(self.trx, np.array([x]), axis=0)
-
         return x
 
-    def evaluate(self, x, dir=0):
+    def evaluate(self, x, bounds, dir=0):
 
-        ans = self._evaluate(x, dir=dir)
+        ans = self._evaluate(x, bounds, dir=dir)
 
         return ans
     
-    def eval_grad(self, x, dir=0):
+    def eval_grad(self, x, bounds, dir=0):
 
-        ans = self._eval_grad(x, dir=dir)
+        ans = self._eval_grad(x, bounds, dir=dir)
 
         return ans
 
-    def eval_constraint(self, x, dir=0):
+    def eval_constraint(self, x, bounds, dir=0):
 
-        ans = self._eval_constraint(x, dir=dir)
+        ans = self._eval_constraint(x, bounds, dir=dir)
 
         pass
 
-    def eval_constraint_grad(self, x, dir=0):
+    def eval_constraint_grad(self, x, bounds, dir=0):
 
-        ans = self._eval_constraint_grad(x, dir=dir)
+        ans = self._eval_constraint_grad(x, bounds, dir=dir)
 
         pass
 
@@ -170,16 +218,16 @@ class ASCriteria():
     def initialize(self, model=None):
         pass
 
-    def _evaluate(self, x, dir=0):
+    def _evaluate(self, x, bounds, dir=0):
         pass
 
-    def _eval_grad(self, x, dir=0):
+    def _eval_grad(self, x, bounds, dir=0):
         pass
 
-    def _eval_constraint(self, x, dir=0):
+    def _eval_constraint(self, x, bounds, dir=0):
         pass
 
-    def _eval_constraint_grad(self, x, dir=0):
+    def _eval_constraint_grad(self, x, bounds, dir=0):
         pass
 
     """
