@@ -22,7 +22,7 @@ ref_strategy = 2
 use_truth_to_train = False #NEW, ONLY IF USING SURR
 use_surrogate = True
 full_surrogate = True
-retain_uncertain_points = True
+retain_uncertain_points = False
 
 
 
@@ -43,6 +43,7 @@ initial_trust_radius = 1.0
 
 ##### optimization #####
 x_init = 5.
+inexact_gradient_only = False
 # gtol 
 # stol
 # xi
@@ -52,8 +53,8 @@ u_dim = 1
 eta_use = 1.0
 N_t = 5000*u_dim
 # N_t = 500*u_dim
-N_m = 2
-jump = 100
+N_m = 6
+jump = 10
 sample_type = 'Adaptive'
 
 ##### Collocation UQ Parameters #####

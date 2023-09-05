@@ -143,14 +143,19 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
 
 def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
 
-    count = int(ntr/batch)
+    count = int(np.ceil(ntr/batch))
     hist = []
     errh = []
     errh2 = []
     model = copy.deepcopy(model0)
-    
-    intervals = np.arange(0, count+1)
 
+    # index batch sizes
+    batch_use = count*[batch]
+    rem = ntr % batch
+    if rem != 0:
+        batch_use[-1] = ntr % batch
+
+    intervals = np.arange(0, count+1)
     for i in range(count):
         # try:
         if 1:
@@ -161,8 +166,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
             #x0 = np.zeros([1, dim])
 
             # get the new points
-            xnew = np.array(getxnew(rcrit, bounds, batch, x_init=rcrit.fix_val, options=options))
-            # import pdb; pdb.set_trace()
+            xnew = np.array(getxnew(rcrit, bounds, batch_use[i], x_init=rcrit.fix_val, options=options))
             # add the new points to the model
             t0 = np.append(t0, xnew, axis=0)
             f0 = np.append(f0, func(xnew), axis=0)

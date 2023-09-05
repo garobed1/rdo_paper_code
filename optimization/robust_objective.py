@@ -5,9 +5,9 @@ from utils.error import stat_comp, _gen_var_lists
 from scipy.special import legendre, hermite, jacobi, roots_legendre, roots_hermite, roots_jacobi
 from smt.sampling_methods import LHS
 from infill.getxnew import adaptivesampling
-
+from infill.refinement_picker import GetCriteria
 from smt.utils.options_dictionary import OptionsDictionary
-
+from utils.sutils import convert_to_smt_grads
 
 # this one better suited for surrogate model
 
@@ -44,6 +44,7 @@ class RobustSampler():
         self.func_computed = False #do we have function data at the samples?
         self.grad_computed = False #do we have gradient data at the samples?
         self.stop_generating = True
+        self.dont_reset = False #for adaptive sampler, don't reset attributes if we've computed them through sampling
         self.func = None #set function for adaptive refinement
 
         self._attribute_reset()
@@ -127,7 +128,6 @@ class RobustSampler():
         self.scales = scales
 
         self._initialize()
-
         self.generate_uncertain_points(self.N)    
 
 
@@ -234,12 +234,11 @@ class RobustSampler():
             print(f"{self.options['name']} Iter {self.iter_max}: Only design is changed, no data added")
             ret = 0
         self.x_d_cur = x_d_buf
-
         return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
 
 
     #NOTE: both generate_ and refine_ need an option to introduce noise to the sample
-    def generate_uncertain_points(self, N):
+    def generate_uncertain_points(self, N, func=None, model=None):
         """
         First of two functions that will increment the sampling iteration
 
@@ -256,6 +255,8 @@ class RobustSampler():
             print(f"{self.options['name']} Iter {self.iter_max}: Already have points, no points generated")
             return 0
 
+        self.func = func
+        self.model = model
         tx = self._new_sample(N)
 
         # archive previous dataset
@@ -266,7 +267,7 @@ class RobustSampler():
 
         return 1
 
-    def refine_uncertain_points(self, N, func=None):
+    def refine_uncertain_points(self, N, func=None, model=None):
         """
         Second of two functions that will increment the sampling iteration
         Add more UQ points to the current design. Usually this is nested
@@ -282,6 +283,7 @@ class RobustSampler():
             return
 
         self.func = func
+        self.model = model
         tx = self._refine_sample(N)
 
         # archive previous dataset
@@ -343,8 +345,10 @@ class RobustSampler():
         # update design history, simple list
         self.design_history.append(self.x_d_cur)
 
-        # increment iteration counter
-        self._attribute_reset()
+        # increment iteration counter, reset if not using adaptive sampling
+        if not self.dont_reset:
+            self._attribute_reset()
+        self.dont_reset = False
         self.iter_max += 1
 
     # add samples to this object from outside, in the format of current_samples
@@ -593,14 +597,20 @@ class AdaptiveSampler(RobustSampler):
         self.xlimits = self.options["xlimits"]
 
         # establish criteria
-        self.rcrit = self.options['criteria']
+        self.rset = self.options['criteria']
+        self.rcrit = None # can only initialize this once we initialize the surrogate
 
+        # u_xlimits = self.xlimits[self.x_u_ind]
+        self.sampling = LHS(xlimits=self.xlimits, criterion='maximin')
+
+        self.surrogate_initialized = False
 
     def _declare_options(self):
         # the criteria contains the model, we should tell stat comp to get its surrogate from this
         self.options.declare(
             "criteria",
-            desc="REQUIRED: refinement criteria function for adaptive sampling/infill",
+            default=None,
+            desc="REQUIRED: refinement criteria function for adaptive sampling/infill, given as the list of settings",
         )
 
         self.options.declare(
@@ -624,9 +634,24 @@ class AdaptiveSampler(RobustSampler):
         )   
 
 
-    # NOTE: Not overriding _new_sample, stick with LHS if resetting
-    # def _new_sample(self, N):
-    #     return tx
+    # NOTE: jk we're overriding for now, TODO need option to initialize over udim or full dim FOR THE BASE CLASS
+    def _new_sample(self, N):
+
+
+        # if model already exists, use _refine_sample instead
+        if self.model is not None:
+            tx = self._refine_sample(N)
+        else:
+            tx = self.sampling(N)
+        
+        
+        # tx = np.zeros([N, self.dim])
+        # tx[:, self.x_u_ind] = u_tx
+        # tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
+
+
+        return tx
+
 
     def _refine_sample(self, N):
         
@@ -637,11 +662,17 @@ class AdaptiveSampler(RobustSampler):
         if N < max_batch:
             batch_use = N
 
-        #TODO: MORE MUST BE DONE HERE, NEED TO MODIFY REFINECRITERIA TO OPERATE ON LIMITED SPACE
+        if self.model == None:
+            raise ValueError("Model not supplied!")
+        if self.func == None:
+            raise ValueError("Function not supplied!")
+
         bounds = self.xlimits
+        sset = self.options['criteria']
+        self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), bounds, self.x_u_ind)
         if not self.options['full_refine']:
-            bounds = self.xlimits[self.x_u_ind]
-            self.rcrit.set_static(self.x_d_cur)
+            # bounds = self.xlimits[self.x_u_ind]
+            self.rcrit.set_static(self.x_d_cur[:,0])
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
 
@@ -649,7 +680,8 @@ class AdaptiveSampler(RobustSampler):
         if self.func == None:
             raise ValueError("func not set in AdaptiveSampler")
 
-
+        # perform adaptive sampling
+        # import pdb; pdb.set_trace()
         mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, batch=batch_use, options=as_options)
 
 
@@ -663,7 +695,8 @@ class AdaptiveSampler(RobustSampler):
         self.set_evaluated_func(tf)
         self.set_evaluated_grad(tg)
 
-
+        # make sure we don't reset attributes
+        self.dont_reset = True
 
 
         return tx

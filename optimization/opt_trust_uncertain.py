@@ -317,14 +317,21 @@ class UncertainTrust(OptSubproblem):
                     ulmt = np.minimum(zk_cent[name] + trust_radius, dvbu[name])
                     #TODO: Annoying absolute name path stuff
                     self.prob_model.model.set_design_var_options(name.split('.')[-1], lower=llmt, upper=ulmt)
-                
+
+
+            ### THE SUBPROBLEM SOLVE    
+            # import pdb; pdb.set_trace()
+            # self.prob_model.model.stat.check_partials_flag = True
             # self.prob_model.check_partials()
+            # self.prob_model.model.stat.check_partials_flag = False
             # import pdb; pdb.set_trace()
             fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             self._solve_subproblem(zk)  
             fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
-
-            
+            # self.prob_model.model.stat.check_partials_flag = True
+            # self.prob_model.check_partials()
+            # self.prob_model.model.stat.check_partials_flag = False
+            # import pdb; pdb.set_trace()
 
             #Eval Truth
             if self.options["print"]:
@@ -357,7 +364,6 @@ class UncertainTrust(OptSubproblem):
                 fail = 2
                 break
             # if predicted_reduction <= 0:
-            #     import pdb; pdb.set_trace()
             eta_k = actual_reduction/predicted_reduction
 
             # choose to accept or not
@@ -472,6 +478,7 @@ class UncertainTrust(OptSubproblem):
 
                 rmin = self.options["flat_refinement"] #minimum improvement
                 rcap = self.prob_truth.model.stat.get_fidelity()
+                # rcap = self.options["ref_cap"]
 
                 rk = 0
                 while(lhs > xi*rhs and reflevel < rcap):
@@ -491,7 +498,7 @@ class UncertainTrust(OptSubproblem):
                     print(f"LHS: {lhs}")
                     print(f"RHS: {rhs}")
                     print(f"xi*RHS - LHS = {rhs*xi - lhs}")
-
+                    import pdb; pdb.set_trace()
             else:
 
                 # grab sample data from the truth model if we are using a surrogate
@@ -515,7 +522,7 @@ class UncertainTrust(OptSubproblem):
             print(f"LHS: {lhs}")
             print(f"RHS: {rhs}")
             print(f"xi*RHS - LHS = {rhs*xi - lhs}")
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
 
         if fail:
             failure_messages = (

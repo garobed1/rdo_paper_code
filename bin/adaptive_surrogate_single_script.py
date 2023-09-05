@@ -347,7 +347,6 @@ RCF = rF
 hist = hf
 errhrms = ef
 errhmean = ef2
-
 if rank == 0:
     print("\n")
     print("Experiment Complete")

@@ -23,13 +23,14 @@ computation.
 class HessianRefine(ASCriteria):
     def __init__(self, model, grad, bounds, **kwargs):
 
-        self.name = 'POUHESS'
 
         self.grad = grad
         self.bounds = bounds
         self.Mc = None
 
         super().__init__(model, **kwargs)
+        self.name = 'POUHESS'
+
         self.scaler = 0
 
         self.supports["obj_derivatives"] = True  
@@ -166,7 +167,7 @@ class HessianRefine(ASCriteria):
 
         for i in range(self.ntr):
             work = x - trx[i]
-            dist = D[0][i] + delta#np.sqrt(D[0][i] + delta)
+            dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
             local = 0.5*innerMatrixProduct(self.H[i], work)*self.dV[i]*Mc[i] # NEWNEWNEW
             expfac = np.exp(-self.rho*(dist-mindist))
             numer += local*expfac
@@ -228,8 +229,8 @@ class HessianRefine(ASCriteria):
 
         for i in range(self.ntr):
             work = x - trx[i]
-            dist = D[0][i] + delta#np.sqrt(D[0][i] + delta)
-            ddist = work/D[0][i]
+            dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
+            ddist = (work/D[0][i])*(D[0][i]/dist)
             local = 0.5*innerMatrixProduct(self.H[i], work)*self.dV[i]*Mc[i]
             dlocal = np.dot(self.H[i], work)*self.dV[i]*Mc[i]
             expfac = np.exp(-self.rho*(dist-mindist))
@@ -263,7 +264,6 @@ class HessianRefine(ASCriteria):
 
     def _pre_asopt(self, bounds, dir=0):
         
-
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
 
         m, n = trx.shape

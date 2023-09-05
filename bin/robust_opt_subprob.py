@@ -7,6 +7,7 @@ import openmdao.api as om
 from uq_comp.stat_comp_comp import StatCompComponent
 from optimization.opt_subproblem import SequentialFullSolve
 from optimization.opt_trust_uncertain import UncertainTrust
+from infill.hess_criteria import HessianRefine
 from surrogate.pougrad import POUHessian
 from collections import OrderedDict
 import os, copy
@@ -43,7 +44,7 @@ root = os.getcwd()
 optsplit = osetfile.split(sep='/')
 optuse = '.'.join(optsplit)
 if optuse.endswith('.py'):
-    optsuse = optuse.split('.')[:-1]
+    optuse = optuse.split('.')[:-1]
     optuse = '.'.join(optuse)
 oset = importlib.import_module(optuse)
 title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
@@ -65,25 +66,6 @@ if rank == 0:
         os.mkdir(f"/{root}/{path}/{title}")
     shutil.copy(f"./{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
     shutil.copy(f"./{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
-
-
-
-##### Adaptive Surrogate UQ Parameters #####
-RC0 = None
-max_batch = sset.max_batch
-
-# adaptive sampling options
-options = DefaultOptOptions
-options["local"] = sset.local
-options["localswitch"] = sset.localswitch
-options["errorcheck"] = None
-options["multistart"] = sset.mstarttype
-options["lmethod"] = sset.opt
-try:
-    options["method"] = sset.gopt
-except:
-    pass
-
 
 
 
@@ -124,59 +106,41 @@ x_init = oset.x_init
 
 # optimization
 # args = (func, eta_use)
+jump = oset.jump
 opt_settings = oset.opt_settings
 max_outer = oset.max_outer
 trust_region_bound = oset.trust_region_bound
 initial_trust_radius = oset.initial_trust_radius
-inexact_gradient_only = oset.exact_gradient_only
+inexact_gradient_only = oset.inexact_gradient_only
+
+
+
 
 ### SAMPLING STRATEGY ###
 sample_type = oset.sample_type
+
+# set up truth sampler
 N_t = oset.N_t
-N_m = oset.N_m
 if(sample_type == 'SC'):
     jump = oset.scjump
     N_t = oset.scN_t
-    N_m = oset.scN_m
     sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
                           xlimits=xlimits, 
                           probability_functions=pdfs)
-    sampler_m = CollocationSampler(np.array([x_init]), N=N_m, 
-                          name='model', 
-                          xlimits=xlimits, 
-                          probability_functions=pdfs,
-                          external_only=external_only)
-elif(sample_type == 'Adaptive'):
-    sampler_t = RobustSampler(np.array([x_init]), N=N_t, 
-                          name='truth', 
-                          xlimits=xlimits, 
-                          probability_functions=pdfs, 
-                          retain_uncertain_points=retain_uncertain_points)
-    sampler_m = AdaptiveSampler(np.array([x_init]), N=N_m, 
-                          name='model', 
-                          criteria=RC0,
-                          max_batch=max_batch,
-                          xlimits=xlimits, 
-                          probability_functions=pdfs, 
-                          retain_uncertain_points=retain_uncertain_points)
 else:
     sampler_t = RobustSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
                           xlimits=xlimits, 
                           probability_functions=pdfs, 
                           retain_uncertain_points=retain_uncertain_points)
-    sampler_m = RobustSampler(np.array([x_init]), N=N_m, 
-                          name='model', 
-                          xlimits=xlimits, 
-                          probability_functions=pdfs, 
-                          retain_uncertain_points=retain_uncertain_points,
-                          external_only=external_only)
+
 
 # get variable bounds from sampler_t
 xlimits_d = xlimits[sampler_t.x_d_ind]
 xlimits_u = xlimits[sampler_t.x_u_ind]
 
+##### Surrogate Model Parameters #####
 # set up surrogates #NOTE: not doing it for truth for now
 #TODO: WRITE SURROGATE PICKER AND RC0 PICKER APPS
 msur = None
@@ -190,17 +154,63 @@ if use_surrogate:
     min_contributions = 1e-12
 
     if(full_surrogate):
-        neval = 1+(t_dim+2)
+        sdim = t_dim
         msur = POUHessian(bounds=xlimits)
     else:
-        neval = 1+(u_dim+2)
+        sdim = u_dim
         msur = POUHessian(bounds=xlimits_u)
 
+    neval = sset.neval_fac*t_dim+sset.neval_add
     msur.options.update({"rscale":rscale})
     msur.options.update({"rho":rho})
     msur.options.update({"neval":neval})
     msur.options.update({"min_contribution":min_contributions})
     msur.options.update({"print_prediction":False})
+
+
+##### Adaptive Surrogate UQ Parameters #####
+# NOTE: NEED TO INITIALIZE WITH TRAINED SURROGATE, DO THIS IN THE SAMPLER
+# if sample_type == 'Adaptive':
+#     RC0 = HessianRefine(msur, None, xlimits, neval=neval, rscale=sset.rscale, multistart=sset.multistart, print_rc_plots=sset.rc_print)
+max_batch = sset.batch
+
+# adaptive sampling options
+as_options = DefaultOptOptions
+as_options["local"] = sset.local
+as_options["localswitch"] = sset.localswitch
+as_options["errorcheck"] = None
+as_options["multistart"] = sset.mstarttype
+as_options["lmethod"] = sset.opt
+try:
+    as_options["method"] = sset.gopt
+except:
+    pass
+
+N_m = oset.N_m
+if(sample_type == 'SC'):
+    jump = oset.scjump
+    N_m = oset.scN_m
+    sampler_m = CollocationSampler(np.array([x_init]), N=N_m, 
+                          name='model', 
+                          xlimits=xlimits, 
+                          probability_functions=pdfs,
+                          external_only=external_only)
+elif(sample_type == 'Adaptive'):
+    sampler_m = AdaptiveSampler(np.array([x_init]), N=N_m, 
+                          name='model', 
+                          criteria=sset, #give it the whole settings object
+                          max_batch=max_batch,
+                          xlimits=xlimits, 
+                          probability_functions=pdfs, 
+                          as_options=as_options,
+                          retain_uncertain_points=retain_uncertain_points)
+else:
+    sampler_m = RobustSampler(np.array([x_init]), N=N_m, 
+                          name='model', 
+                          xlimits=xlimits, 
+                          probability_functions=pdfs, 
+                          retain_uncertain_points=retain_uncertain_points,
+                          external_only=external_only)
 
 
 
@@ -212,12 +222,14 @@ probt = om.Problem()
 probt.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probt.model.dvs.add_output("x_d", val=x_init)
 
-probt.model.add_subsystem("stat", StatCompComponent(sampler=sampler_t,
-                                 stat_type="mu_sigma", 
-                                 pdfs=pdfs, 
-                                 eta=eta_use, 
-                                 func=func,
-                                 name=name))
+probt.model.add_subsystem("stat", 
+                                  StatCompComponent(
+                                  sampler=sampler_t,
+                                  stat_type="mu_sigma", 
+                                  pdfs=pdfs, 
+                                  eta=eta_use, 
+                                  func=func,
+                                  name=name))
 # doesn't need a driver
 
 

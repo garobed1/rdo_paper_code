@@ -164,6 +164,8 @@ def stat_comp(model, prob, stat_type="mu_sigma", N=5000, xdata=None, fdata=None,
             tf = None
             tg = None
             N = xdata.shape[0]
+            # set design dimensions 
+            tx[:,static_list] = [pdf_list[i] for i in static_list]
     else:
         # generate points
         u_xlimits = xlimits[uncert_list] 
