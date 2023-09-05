@@ -215,9 +215,9 @@ class RobustSampler():
         
         x_d_buf = x_d_new
         ret = 0
-        print(f"{self.options['name']} Iter {self.iter_max}: Design {x_d_buf}")
+        print(f"o {self.options['name']} Iteration {self.iter_max}: Design {x_d_buf}", end='')
         if np.allclose(x_d_buf, self.x_d_cur, rtol = 1e-15, atol = 1e-15):
-            print(f"{self.options['name']} Iter {self.iter_max}: No change in design, returning")
+            print(f": No change in design, no data added")
             return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
 
         if not self.options["external_only"]:
@@ -229,9 +229,12 @@ class RobustSampler():
                 self.current_samples['x'][:, self.x_d_ind] = x_d_buf
                 # self.x_samples[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
                 self.has_points = True
+                print(f": Design is changed, retaining data from previous locations")
+            else:
+                print(f": Design is changed, ready to add new data")
             ret = 1
         else:
-            print(f"{self.options['name']} Iter {self.iter_max}: Only design is changed, no data added")
+            print(f": Design is changed, but no data added")
             ret = 0
         self.x_d_cur = x_d_buf
         return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining

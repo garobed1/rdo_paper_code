@@ -119,7 +119,7 @@ inexact_gradient_only = oset.inexact_gradient_only
 ### SAMPLING STRATEGY ###
 sample_type = oset.sample_type
 
-# set up truth sampler
+### TRUTH SAMPLERS ###
 N_t = oset.N_t
 if(sample_type == 'SC'):
     jump = oset.scjump
@@ -140,9 +140,8 @@ else:
 xlimits_d = xlimits[sampler_t.x_d_ind]
 xlimits_u = xlimits[sampler_t.x_u_ind]
 
-##### Surrogate Model Parameters #####
-# set up surrogates #NOTE: not doing it for truth for now
-#TODO: WRITE SURROGATE PICKER AND RC0 PICKER APPS
+##### SURROGATE MODEL PARAMETERS #####
+#TODO: WRITE SURROGATE PICKER
 msur = None
 if use_surrogate:
     rscale = 5.5
@@ -168,13 +167,8 @@ if use_surrogate:
     msur.options.update({"print_prediction":False})
 
 
-##### Adaptive Surrogate UQ Parameters #####
-# NOTE: NEED TO INITIALIZE WITH TRAINED SURROGATE, DO THIS IN THE SAMPLER
-# if sample_type == 'Adaptive':
-#     RC0 = HessianRefine(msur, None, xlimits, neval=neval, rscale=sset.rscale, multistart=sset.multistart, print_rc_plots=sset.rc_print)
+##### ADAPTIVE SURROGATE UQ PARAMETERS #####
 max_batch = sset.batch
-
-# adaptive sampling options
 as_options = DefaultOptOptions
 as_options["local"] = sset.local
 as_options["localswitch"] = sset.localswitch
@@ -186,6 +180,7 @@ try:
 except:
     pass
 
+### MODEL SAMPLERS ###
 N_m = oset.N_m
 if(sample_type == 'SC'):
     jump = oset.scjump
@@ -214,10 +209,7 @@ else:
 
 
 
-
-
-
-### TRUTH ###
+### TRUTH OPENMDAO SETUP ###
 probt = om.Problem()
 probt.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probt.model.dvs.add_output("x_d", val=x_init)
@@ -231,21 +223,16 @@ probt.model.add_subsystem("stat",
                                   func=func,
                                   name=name))
 # doesn't need a driver
-
-
-
 probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
 probt.driver.opt_settings = opt_settings
 probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
-
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probt.model.add_objective("stat.musigma")
-
-
 # probt.setup()
 # probt.run_model()
+
 
 """ 
 raw optimization section
@@ -269,10 +256,10 @@ raw optimization section
 """ 
 raw optimization section
 """
-### MODEL ###
-dvdict = OrderedDict()
 
-# import pdb; pdb.set_trace()
+
+### MODEL OPENMDAO SETUP ###
+dvdict = OrderedDict()
 probm = om.Problem()
 probm.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probm.model.dvs.add_output("x_d", val=x_init)
@@ -295,6 +282,7 @@ probm.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
 # dvdict = probm.model.get_design_vars()
 # probm.setup()
 
+### TRUST OPTIMIZATION OPENMDAO SETUP ###
 if trust_region_bound == 1:
     # connect all dvs 
     dv_settings = dvdict
@@ -306,13 +294,8 @@ if trust_region_bound == 1:
     # probm.model.trust.add_input("x_d", val=x_init)
     # probm.model.trust.set_center(zk)
     # probm.model.connect("x_d", "trust.x_d")
-
 # if 2, handle with changing dv bounds internally DEFAULT BEHAVIOR USE THIS
-
-
 probm.model.add_objective("stat.musigma")
-
-
 if trust_region_bound: #anything but 0
     sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
                                     initial_trust_radius=initial_trust_radius,
@@ -329,6 +312,9 @@ else:
                                     use_truth_to_train=use_truth_to_train,
                                     ref_strategy=ref_strategy)
 sub_optimizer.setup_optimization()
+
+
+### ORIGINAL FUNCTION PLOT ###
 # ndir = 150
 # x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
 # y = np.zeros([ndir])
@@ -336,24 +322,27 @@ sub_optimizer.setup_optimization()
 #     probt.set_val("stat.x_d", x[j])
 #     probt.run_model()
 #     y[j] = probt.get_val("stat.musigma")
-# # Plot original function
 # plt.plot(x, y, label='objective')
 
 # plt.savefig(f"./{name}/objrobust1_true.pdf", bbox_inches="tight")
-# import pdb; pdb.set_trace()
-# play around with values/model runs here
+
+### INITIALIZE DESIGN ###
 sub_optimizer.prob_truth.set_val("stat.x_d", x_init)
 sub_optimizer.prob_model.set_val("stat.x_d", x_init)
 # probm.setup()
 sub_optimizer.prob_truth.set_val("x_d", x_init)
 sub_optimizer.prob_model.set_val("x_d", x_init)
 # om.n2(probm)
-sub_optimizer.prob_truth.run_model()
-sub_optimizer.prob_model.run_model()
+# sub_optimizer.prob_truth.run_model()
+# sub_optimizer.prob_model.run_model()
 
 
+### PERFORM OPTIMIZATION
 sub_optimizer.solve_full()
+### PERFORM OPTIMIZATION
 
+
+### CONVERGENCE PLOTS ###
 x_opt_1 = copy.deepcopy(probm.model.get_val("x_d")[0])
 
 func_calls_t = probt.model.stat.func_calls

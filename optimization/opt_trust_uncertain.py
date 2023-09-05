@@ -498,7 +498,7 @@ class UncertainTrust(OptSubproblem):
                     print(f"LHS: {lhs}")
                     print(f"RHS: {rhs}")
                     print(f"xi*RHS - LHS = {rhs*xi - lhs}")
-                    import pdb; pdb.set_trace()
+                    # import pdb; pdb.set_trace()
             else:
 
                 # grab sample data from the truth model if we are using a surrogate
