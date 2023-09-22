@@ -222,7 +222,8 @@ class StatCompComponent(om.ExplicitComponent):
                                 xdata=eval_sampler)
         fm = res[0]
         fs = res[1]
-
+        obj = eta*fm + (1-eta)*fs
+        print(f"o       {self.sampler.options['name']} Iteration {self.sampler.iter_max}: Objective = {obj} ")
         ### FD CHECK
         # h = 1e-6
         # gres = stat_comp(self.surrogate, self.func, 
@@ -254,8 +255,8 @@ class StatCompComponent(om.ExplicitComponent):
         #         plt.plot(x, fm)
         #         plt.savefig(f"./{path}/subprob_surr_2d_obj_{self.sampler.iter_max}.pdf", bbox_inches="tight")
         #         plt.clf()
-        self.xps.append(copy.deepcopy(x[0]))
-        self.objs.append(fm)
+        self.xps.append(copy.deepcopy(x))
+        self.objs.append(obj)
         if len(self.func_calls):
             if self.surrogate and not (moved or not call_track):
                 self.func_calls.append(self.func_calls[-1])
@@ -265,7 +266,7 @@ class StatCompComponent(om.ExplicitComponent):
             self.func_calls.append(self.sampler.current_samples['x'].shape[0])
 
 
-        outputs['musigma'] = eta*fm + (1-eta)*fs
+        outputs['musigma'] = obj
 
     def compute_partials(self, inputs, partials):
 

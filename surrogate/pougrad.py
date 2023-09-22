@@ -75,6 +75,7 @@ class POUSurrogate(SurrogateModel):
 
         self.supports["training_derivatives"] = True
 
+        self._return_terms = False # return gradient terms, only on when calling new method
     """
     Evaluate the surrogate as-is at the point x
 
@@ -216,6 +217,9 @@ class POUSurrogate(SurrogateModel):
         # loop over rows in xt
         y_ = np.zeros(numeval)
         dy_dx_ = np.zeros(numeval)
+        d1_ = np.zeros(numeval)
+        d2_ = np.zeros(numeval)
+        d3_ = np.zeros(numeval)
         for k in range(numeval):
             x = X_cont[k,:]
 
@@ -249,14 +253,27 @@ class POUSurrogate(SurrogateModel):
             # exec2 += t2-t1
             
             y_[k] = numer/denom
-            dy_dx_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
+            # dy_dx_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
+
+            d1_[k] = np.dot(local, dexpfac)/denom
+            d2_[k] = np.dot(dlocal, expfac)/denom
+            # import pdb; pdb.set_trace()
+            d3_[k] = -(numer*ddenom)/(denom**2)
+
+            # dy_dx_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
 
         y = (self.y_mean + self.y_std * y_).ravel()
-        dy_dx = (self.y_std * dy_dx_).ravel()/self.X_scale[kx] #???? # need to find why this is needed
+        # dy_dx = (self.y_std * dy_dx_).ravel()/self.X_scale[kx] 
+        d1 = (self.y_std * d1_).ravel()/self.X_scale[kx] 
+        d2 = (self.y_std * d2_).ravel()/self.X_scale[kx] 
+        d3 = (self.y_std * d3_).ravel()/self.X_scale[kx] 
         # print("mindist  = ", exec1)
         # print("evaluate = ", exec2)
 
-        return dy_dx
+        if self._return_terms:
+            return d1, d2, d3
+
+        return d1+d2+d3 #dy_dx
 
 
     def higher_terms(self, dx, g, h):
@@ -267,7 +284,6 @@ class POUSurrogate(SurrogateModel):
         dterms = np.zeros(dx.shape[0])
         dterms += g[:,kx]
         return dterms
-
 
     def _train(self):
         xc = self.training_points[None][0][0]
@@ -290,7 +306,7 @@ class POUSurrogate(SurrogateModel):
         
         for i in range(self.dim):
             self.g_norma[:,[i]] = self.training_points[None][i+1][1]*(self.X_scale[i]/self.y_std)
-        
+
         self.tree = KDTree(self.X_norma)
 
         self._train_further()
@@ -298,8 +314,14 @@ class POUSurrogate(SurrogateModel):
     def _train_further(self):
         xc = self.training_points[None][0][0]
         self.h = np.zeros([xc.shape[0], self.dim, self.dim])
-        
         # self.dV = estimate_pou_volume(self.training_points[None][0][0], self.options["bounds"])
+        
+    def get_gradient_terms(self, xt, kx):
+
+        self._return_terms = True
+        d1, d2, d3 = self._predict_derivatives(xt, kx)
+        self._return_terms = False
+        return d1, d2, d3
 
 '''
 First-order POU surrogate with Hessian estimation
@@ -376,6 +398,7 @@ class POUHessian(POUSurrogate):
             indn.append(ind)
         hess = np.zeros([self.ntr, self.dim, self.dim])
         mcs = np.zeros(self.ntr)
+        # import pdb; pdb.set_trace()
         for i in range(self.ntr):
             Hh, mc = quadraticSolveHOnly(self.X_norma[i,:], self.X_norma[indn[i][1:nstencil],:], \
                                      self.y_norma[i], self.y_norma[indn[i][1:nstencil]], \

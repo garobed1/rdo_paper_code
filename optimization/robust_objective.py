@@ -215,7 +215,7 @@ class RobustSampler():
         
         x_d_buf = x_d_new
         ret = 0
-        print(f"o {self.options['name']} Iteration {self.iter_max}: Design {x_d_buf}", end='')
+        print(f"o       {self.options['name']} Iteration {self.iter_max}: Design {x_d_buf}", end='')
         if np.allclose(x_d_buf, self.x_d_cur, rtol = 1e-15, atol = 1e-15):
             print(f": No change in design, no data added")
             return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
@@ -255,9 +255,10 @@ class RobustSampler():
         """
         # check if we already have them
         if self.has_points:
-            print(f"{self.options['name']} Iter {self.iter_max}: Already have points, no points generated")
+            print(f"o       {self.options['name']} Iteration {self.iter_max}: Already have points, no points generated")
             return 0
 
+        print(f"o       {self.options['name']} Iteration {self.iter_max}: Generating {N} new points for UQ evaluation")
         self.func = func
         self.model = model
         tx = self._new_sample(N)
@@ -285,6 +286,7 @@ class RobustSampler():
             print(f"{self.options['name']} Iter {self.iter_max}: No refinement requested, no points generated")
             return
 
+        print(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
         self.func = func
         self.model = model
         tx = self._refine_sample(N)

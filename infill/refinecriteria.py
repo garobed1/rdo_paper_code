@@ -6,10 +6,13 @@ from matplotlib import pyplot as plt
 from smt.utils.options_dictionary import OptionsDictionary
 from smt.sampling_methods import LHS
 from smt.surrogate_models import GEKPLS
+from smt.utils.checks import check_support, check_nx, ensure_2d_array
 from surrogate.pougrad import POUSurrogate, POUHessian
 from scipy.linalg import lstsq, eig
 from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.optimize import Bounds
+from scipy.integrate import nquad
+from scipy.stats import qmc
 from utils.sutils import print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
 
 """Base Class for Adaptive Sampling Criteria Functions"""
@@ -55,6 +58,7 @@ class ASCriteria():
         self.supports = supports = {}
         supports["obj_derivatives"] = False
         supports["uses_constraints"] = False
+        supports["rescaling"] = False
 
         # set options
         self.options = OptionsDictionary()
@@ -65,6 +69,18 @@ class ASCriteria():
             False, 
             types=bool,
             desc="Print plots of the RC function if 1D or 2D"
+            )
+        self.options.declare(
+            "print_energy", 
+            True, 
+            types=bool,
+            desc="Compute and print RC energy values upon refinement"
+            )
+        self.options.declare(
+            "return_rescaled", 
+            False, 
+            types=bool,
+            desc="If supported, return RC output scaled back to original function"
             )
         self.options.declare(
             "improve", 
@@ -127,17 +143,17 @@ class ASCriteria():
         # NOTE: xc not doing anything here
 
         # ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([2])
-        # step = 0.5*np.ones([2])
-        # step[0] += h
-        # ad = self.eval_grad(zero, bounds, dir)
-        # fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        # step = 0.5*np.ones([2])
-        # step[1] += h
-        # fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        # fd = [fd1, fd2]
-        # import pdb; pdb.set_trace()
+        h = 1e-6
+        zero = 0.5*np.ones([1,bounds.shape[0]])
+        step = 0.5*np.ones([1,bounds.shape[0]])
+        step[0,0] += h
+        ad = self.eval_grad(zero, bounds, dir)
+        fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        step = 0.5*np.ones([1,bounds.shape[0]])
+        step[0,1] += h
+        fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        fd = [fd1, fd2]
+        import pdb; pdb.set_trace()
 
         ### Get Reduced Space
         dim_r = len(self.sub_ind)
@@ -181,11 +197,15 @@ class ASCriteria():
 
     def evaluate(self, x, bounds, dir=0):
 
+        # _x = ensure_2d_array(x, 'x')
+        # import pdb; pdb.set_trace()
         ans = self._evaluate(x, bounds, dir=dir)
 
         return ans
     
     def eval_grad(self, x, bounds, dir=0):
+
+        # _x = ensure_2d_array(x, 'x')
 
         ans = self._eval_grad(x, bounds, dir=dir)
 
@@ -193,11 +213,15 @@ class ASCriteria():
 
     def eval_constraint(self, x, bounds, dir=0):
 
+        # _x = ensure_2d_array(x, 'x')
+
         ans = self._eval_constraint(x, bounds, dir=dir)
 
         pass
 
     def eval_constraint_grad(self, x, bounds, dir=0):
+
+        # _x = ensure_2d_array(x, 'x')
 
         ans = self._eval_constraint_grad(x, bounds, dir=dir)
 
@@ -230,13 +254,43 @@ class ASCriteria():
     def _eval_constraint_grad(self, x, bounds, dir=0):
         pass
 
-    """
-    self determined stopping criteria, e.g. validation error
+    
+    def get_energy(self, xlimits, dir=0):
+        """
+        self determined stopping criteria, e.g. validation error
 
-    Integrate over self.evaluate
-    """
-    def get_energy(self):
-        return np.inf
+        Integrate over self.evaluate
+
+        xfix needed if using sub index
+        """
+
+        self.pre_asopt(xlimits, dir=dir)
+
+        n = xlimits.shape[0]
+        unit_bounds = np.zeros([n,2])
+        unit_bounds[:,1] = 1.
+        sub_ind = np.arange(0, n).tolist()
+        fix_ind = []
+        xfix = None
+        if self.options['sub_index'] is not None:
+            sub_ind = self.options['sub_index']
+            m_e = len(sub_ind)
+            # grab values for other indices from x_init
+            fix_ind = [x for x in np.arange(0, n).tolist() if x not in sub_ind]
+            xfix = qmc.scale(np.array([self.fix_val]), xlimits[fix_ind,0], xlimits[fix_ind,1], reverse=True)#[fix_ind]
+
+        def eval_eff(x, bounds, direction):
+            x = np.atleast_1d(x)
+            x_eff = np.zeros([n])
+            x_eff[sub_ind] = x
+            x_eff[fix_ind] = xfix
+
+            y = self.evaluate(x_eff, bounds, direction)
+            return y
+
+        energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
+
+        return -energy
 
     
 """

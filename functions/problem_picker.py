@@ -1,7 +1,7 @@
 import numpy as np
 from functions.example_problems import BetaRobust1D, BetaRobustEx1D, ToyLinearScale, Ishigami, Peaks2D, QuadHadamard, MultiDimJump, MultiDimJumpTaper, FuhgSingleHump, FuhgP3, FuhgP8, FuhgP9, FuhgP10, FakeShock
 from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine
-from smt.problems import Branin, Sphere, LpNorm, Rosenbrock, WaterFlow, WeldedBeam, RobotArm, CantileverBeam, WingWeight
+from smt.problems import TensorProduct, Branin, Sphere, LpNorm, Rosenbrock, WaterFlow, WeldedBeam, RobotArm, CantileverBeam, WingWeight
 from functions.shock_problem import ImpingingShock
 from mpi4py import MPI
 import mphys_comp.impinge_setup as default_impinge_setup
@@ -12,6 +12,8 @@ def GetProblem(prob, dim, alpha = 8., use_design=False):
     #alpha = 8.       #arctangent jump strength
     if(prob == "arctan"):
         trueFunc = MultiDimJump(ndim=dim, alpha=alpha)
+    elif(prob == "tensexp"):
+        trueFunc = TensorProduct(ndim=dim, func='exp')
     elif(prob == "arctantaper"):
         trueFunc = MultiDimJumpTaper(ndim=dim, alpha=alpha)
     elif(prob == "rosenbrock"):

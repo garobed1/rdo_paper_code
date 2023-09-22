@@ -65,6 +65,9 @@ class OptSubproblem():
 
         self.result_cur = None
 
+        self.pred = 0 # predicted reduction
+        self.ared = 0 # actual/approximate reduction
+
         self._declare_options()
         self.options.update(kwargs)
 
@@ -92,11 +95,52 @@ class OptSubproblem():
             desc="Maximum number of outer iterations"
         )
 
+        # NOTE: mainly useful for trust radius, but can be useful for approximate truth as well
+        declare(
+            "eta", 
+            default=0.25, 
+            types=float,
+            desc="main acceptance parameter for proposed step"
+        )
+
+        declare(
+            "eta_1", 
+            default=0.25, 
+            types=float,
+            desc="acceptance threshold for shrinking radius"
+        )
+
+        declare(
+            "eta_2", 
+            default=0.75, 
+            types=float,
+            desc="acceptance threshold for increasing radius"
+        )
+        # NOTE: Kouri uses \omega = 0.75
+        declare(
+            "omega",
+            default=1.0,
+            types=float,
+            desc="exp factor for the truth approximation error tolerance, range (0,1)"
+        )
+
         declare(
             "solve_subproblem_with_driver", 
             default=True, 
             types=bool,
             desc="Whether or not we solve the subproblem with the OM driver or an external method (trust region)"
+        )
+        declare(
+            "approximate_truth", 
+            default=False, 
+            types=bool,
+            desc="Run as if the truth function is being approximated, increase accuracy as needed according to (4.8) in Kouri 2014"
+        )
+        declare(
+            "approximate_truth_max", 
+            default=5000, 
+            types=int,
+            desc="maximum allowable truth level if we're approximating the truth value"
         )
 
         declare(
@@ -247,6 +291,20 @@ class OptSubproblem():
             i += size
 
 
+        # if we're using an approximate truth, we need to determine an appropriate uq level
+        # error est \theta_k \leq \eta min(pred_k, r_k), where pred_k is predicted reduction
+
+        # so compute pred before coming here
+        # and attach an error estimate to prob_truth
+        if self.options["approximate_truth"]:
+            eta = min(self.options["eta_1"], 1. - self.options["eta_2"])
+            # min(pred, r), use pred
+            tol = eta * self.pred
+            tol ** (1./self.options["omega"])
+            
+            pass
+            
+
         self.prob_truth.run_model()
 
         #TODO: Record number of evaluations (should come from the eventual component)
@@ -348,9 +406,10 @@ class SequentialFullSolve(OptSubproblem):
             
                 print(f"    Solving subproblem...")
             #Complete a full optimization
+            fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             self._solve_subproblem(zk)
             
-            fmod = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
+            fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
 
 
 
@@ -359,17 +418,22 @@ class SequentialFullSolve(OptSubproblem):
                 print(f"    Computing truth model...")
 
             zk = self.prob_model.driver.get_design_var_values()
+
+            # hold on to original truth value
+            ftru_cent = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
+            self.pred = fmod_cent - fmod_cand
+
             self._eval_truth(zk)
 
 
 
-            ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
+            ftru_cand = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
 
             # this needs to be the lagrangian gradient with constraints
             # gmod = self.prob_model.compute_totals(return_format='array')
             gtru = self.prob_truth.compute_totals(return_format='array')
 
-            ferr = abs(fmod-ftru)
+            ferr = abs(fmod_cand-ftru_cand)
 
             # perhaps instead we try the condition from Kouri (2013)?
             # not really, it uses the model gradient, which is known to be
@@ -437,7 +501,7 @@ class SequentialFullSolve(OptSubproblem):
         # Add constraint loop as well
         print(f"    -")
         print(f"    Final design vars: {zk}")
-        print(f"    Final objective: {ftru}")
+        print(f"    Final objective: {ftru_cand}")
         print(f"    Final gradient norm: {getext}")
         print(f"    Final model error: {fetext}")
         print(f"    Final model level: {reflevel}")

@@ -149,6 +149,12 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
     errh2 = []
     model = copy.deepcopy(model0)
 
+    if(rcrit.options["print_iter"] and rank == 0):
+        print(f"___________________________________________________________________________")
+        print(f"O       Begin Adaptive Sampling")
+        print(f"O       Criteria = {rcrit.name}| Function = {func.options['name']} | Model = {model0.name}")
+        print(f"O       Added Points = {ntr} | Batch Size = {batch} | Steps = {count}")
+        print(f"___________________________________________________________________________")
     # index batch sizes
     batch_use = count*[batch]
     rem = ntr % batch
@@ -205,8 +211,13 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
                 hist.append(copy.deepcopy(rcrit.model.training_points[None]))        
 
             if(rcrit.options["print_iter"] and rank == 0):
-                print("Iteration: ", i)
-
+                print(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
+                if rcrit.options["print_energy"]:
+                    en = rcrit.get_energy(bounds)
+                    print(f", Energy = {en}")
+                else:
+                    print('')
+                
             # replace criteria
             rcrit.initialize(model, g0)
         # except:

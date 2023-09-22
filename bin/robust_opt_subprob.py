@@ -112,6 +112,8 @@ max_outer = oset.max_outer
 trust_region_bound = oset.trust_region_bound
 initial_trust_radius = oset.initial_trust_radius
 inexact_gradient_only = oset.inexact_gradient_only
+approximate_truth = oset.approximate_truth
+approximate_truth_max = oset.approximate_truth_max
 
 
 
@@ -124,6 +126,7 @@ N_t = oset.N_t
 if(sample_type == 'SC'):
     jump = oset.scjump
     N_t = oset.scN_t
+    approximate_truth_max = oset.sc_approximate_truth_max
     sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
                           name='truth', 
                           xlimits=xlimits, 
@@ -150,7 +153,9 @@ if use_surrogate:
     rho = 10 
     if hasattr(sset, 'rho'):
         rscale = sset.rho
-    min_contributions = 1e-12
+    # NOTE: NON-ZERO CAUSES NANS
+    # min_contributions = 1e-12
+    min_contributions = 0.0
 
     if(full_surrogate):
         sdim = t_dim
@@ -165,6 +170,7 @@ if use_surrogate:
     msur.options.update({"neval":neval})
     msur.options.update({"min_contribution":min_contributions})
     msur.options.update({"print_prediction":False})
+    msur.options.update({"print_global":False})
 
 
 ##### ADAPTIVE SURROGATE UQ PARAMETERS #####
@@ -230,10 +236,27 @@ probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probt.model.add_objective("stat.musigma")
-# probt.setup()
-# probt.run_model()
+probt.setup()
+probt.run_model()
 
+### ORIGINAL FUNCTION PLOT ###
+ndir = 600
+x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
+y = np.zeros([ndir])
+for j in range(ndir):
+    probt.set_val("stat.x_d", x[j])
+    probt.run_model()
+    y[j] = probt.get_val("stat.musigma")
+minind = np.argmin(y)
+plt.plot(x, y, label='objective')
+print(f"x* = {x[minind]}")
+print(f"y* = {y[minind]}")
+plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+plt.xlabel(r'$x_d$')
+plt.ylabel(r'$S(x_d)$')
+plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
 
+import pdb; pdb.set_trace()
 """ 
 raw optimization section
 """
@@ -273,9 +296,9 @@ probm.model.add_subsystem("stat", StatCompComponent(sampler=sampler_m,
                                  full_space=full_surrogate,
                                  name=name,
                                  print_surr_plots=print_plots))
-probm.driver = om.pyOptSparseDriver(optimizer='PSQP') #Default: SLSQP
+# probm.driver = om.pyOptSparseDriver(optimizer='PSQP') #Default: SLSQP
 # probm.driver.opt_settings = opt_settings
-# probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
+probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 # probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
@@ -304,13 +327,17 @@ if trust_region_bound: #anything but 0
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
                                     inexact_gradient_only=inexact_gradient_only,
-                                    ref_strategy=ref_strategy)
+                                    ref_strategy=ref_strategy,
+                                    approximate_truth=approximate_truth,
+                                    approximate_truth_max=approximate_truth_max)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,
-                                    ref_strategy=ref_strategy)
+                                    ref_strategy=ref_strategy,
+                                    approximate_truth=approximate_truth,
+                                    approximate_truth_max=approximate_truth_max)
 sub_optimizer.setup_optimization()
 
 
@@ -333,8 +360,8 @@ sub_optimizer.prob_model.set_val("stat.x_d", x_init)
 sub_optimizer.prob_truth.set_val("x_d", x_init)
 sub_optimizer.prob_model.set_val("x_d", x_init)
 # om.n2(probm)
-# sub_optimizer.prob_truth.run_model()
-# sub_optimizer.prob_model.run_model()
+sub_optimizer.prob_truth.run_model()
+sub_optimizer.prob_model.run_model()
 
 
 ### PERFORM OPTIMIZATION

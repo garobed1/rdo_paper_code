@@ -37,8 +37,6 @@ class HessianRefine(ASCriteria):
         
     def _init_options(self):
         declare = self.options.declare
-        
-        
 
         declare(
             "rscale", 
@@ -61,6 +59,12 @@ class HessianRefine(ASCriteria):
             desc="scale criteria in a cell by the condition number of the hess approx matrix"
         )
         declare(
+            "scale_by_volume", 
+            True, 
+            types=bool,
+            desc="scale criteria in a cell by the approximate volume of the cell"
+        )
+        declare(
             "out_of_bounds", 
             0, 
             types=(int, float),
@@ -76,6 +80,8 @@ class HessianRefine(ASCriteria):
         #     "fun":self.eval_constraint,
         #     "args":[],
         # }
+        self.supports["rescaling"] = True
+
         if(model is not None):
             self.model = copy.deepcopy(model)
             kx = 0
@@ -100,6 +106,12 @@ class HessianRefine(ASCriteria):
             ) = standardization2(trxs, trfs, self.bounds)
 
             trg = self.grad*(X_scale/y_std)
+
+            self.x_off = X_offset
+            self.x_sca = X_scale
+            self.y_off = y_mean
+            self.y_sca = y_std
+
         else:
             trx = self.model.X_norma[0:self.ntr]#model.training_points[None][0][0]
             trf = self.model.y_norma[0:self.ntr]#training_points[None][0][1]
@@ -110,7 +122,11 @@ class HessianRefine(ASCriteria):
             # else:
             trg = self.grad*(self.model.X_scale/self.model.y_std)
 
-        
+            self.x_off = self.model.X_offset
+            self.x_sca = self.model.X_scale
+            self.y_off = self.model.y_mean
+            self.y_sca = self.model.y_std
+
         # Determine rho for the error model
         self.rho = self.options['rscale']*pow(self.ntr, 1./self.dim)
 
@@ -159,16 +175,18 @@ class HessianRefine(ASCriteria):
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
 
         # exhaustive search for closest sample point, for regularization
-        D = cdist(np.array([x]), trx)
+        # import pdb; pdb.set_trace()
+        # D = cdist(np.array([x]), trx)
+        D = cdist(x, trx)
         mindist = min(D[0])
 
         numer = 0
         denom = 0
 
         for i in range(self.ntr):
-            work = x - trx[i]
+            work = x[0,:] - trx[i]
             dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
-            local = 0.5*innerMatrixProduct(self.H[i], work)*self.dV[i]*Mc[i] # NEWNEWNEW
+            local = self.higher_terms(work, None, self.H[i])*self.dV[i]*Mc[i] # NEWNEWNEW
             expfac = np.exp(-self.rho*(dist-mindist))
             numer += local*expfac
             denom += expfac
@@ -202,6 +220,7 @@ class HessianRefine(ASCriteria):
             dirdist = np.sqrt(np.dot(work, work)) 
             # ans += 1./(np.dot(work, work) + 1e-10)
             ans += np.exp(-self.rho*(dirdist+ delta))
+
         return ans 
 
 
@@ -218,7 +237,7 @@ class HessianRefine(ASCriteria):
 
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         # exhaustive search for closest sample point, for regularization
-        D = cdist(np.array([x]), trx)
+        D = cdist(x, trx)
         mindist = min(D[0])
 
         numer = 0
@@ -228,11 +247,11 @@ class HessianRefine(ASCriteria):
         dwork = np.ones(self.dim)
 
         for i in range(self.ntr):
-            work = x - trx[i]
+            work = x[0,:] - trx[i]
             dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
             ddist = (work/D[0][i])*(D[0][i]/dist)
-            local = 0.5*innerMatrixProduct(self.H[i], work)*self.dV[i]*Mc[i]
-            dlocal = np.dot(self.H[i], work)*self.dV[i]*Mc[i]
+            local = self.higher_terms(work, None, self.H[i])*self.dV[i]*Mc[i]
+            dlocal = self.higher_terms_deriv(work, None, self.H[i])*self.dV[i]*Mc[i]
             expfac = np.exp(-self.rho*(dist-mindist))
             dexpfac = -self.rho*expfac*ddist
             numer += local*expfac
@@ -257,8 +276,27 @@ class HessianRefine(ASCriteria):
             # ans += -1.0/((d2 + 1e-10)**2)*dd2
             ddirdist = work/dirdist
             ans += -self.rho*ddirdist*np.exp(-self.rho*(dirdist+ delta))
+        
+
+        
         return ans
 
+    def higher_terms(self, dx, g, h):
+        terms = 0.5*innerMatrixProduct(h, dx.T)
+
+        if self.options["return_rescaled"]:
+            terms *= self.y_sca
+        return terms
+
+    def higher_terms_deriv(self, dx, g, h):
+        # terms = (g*dx).sum(axis = 1)
+        dterms = np.zeros(dx.shape[0])
+        for j in range(dx.shape[0]):
+            dterms[j] += np.dot(h[j,:], dx)#0.5*innerMatrixProduct(h, dx)
+        
+        if self.options["return_rescaled"]:
+            dterms *= self.y_sca
+        return dterms
 
 
 
@@ -272,7 +310,10 @@ class HessianRefine(ASCriteria):
         fakebounds = copy.deepcopy(bounds)
         fakebounds[:,0] = 0.
         fakebounds[:,1] = 1.
-        self.dV = estimate_pou_volume(trx, fakebounds)
+        if self.options["scale_by_volume"]:
+            self.dV = estimate_pou_volume(trx, fakebounds)
+        else:
+            self.dV = np.ones(trx.shape[0])
         # if(self.options["out_of_bounds"]):
         #     for i in range(self.dim):
         #         bounds[i][0] = -self.options["out_of_bounds"]
@@ -295,10 +336,67 @@ class HessianRefine(ASCriteria):
 
 
 
+"""
+Same as HessianRefine, but instead uses the norm of H(x-x_k) to determine
+the criteria function. Serves as an indicator 
+
+"""
+class HessianGradientRefine(HessianRefine):
+    def __init__(self, model, grad, bounds, **kwargs):
 
 
 
+        super().__init__(model, grad, bounds, **kwargs)
+        self.name = 'POUHESSGRAD'
 
+
+    def _init_options(self):
+
+        super()._init_options()
+        
+        declare = self.options.declare
+
+        declare(
+            "grad_select", 
+            None, 
+            types=(list),
+            desc="can select specific gradient dimensions to take the average of"
+        )
+
+
+    def higher_terms(self, dx, g, h):
+
+        # terms = np.zeros([dx.shape[0]])
+        ind_use = [l for l in range(dx.shape[0])]
+        if self.options["grad_select"] is not None: 
+            ind_use = self.options["grad_select"]
+
+        terms = np.dot(h, dx)
+        
+        if self.options["return_rescaled"]:
+            terms *= self.y_sca/self.x_sca
+
+        avg_terms = np.linalg.norm(terms[ind_use])
+        return avg_terms
+
+    def higher_terms_deriv(self, dx, g, h):
+        
+        ind_use = [l for l in range(dx.shape[0])]
+        if self.options["grad_select"] is not None: 
+            ind_use = self.options["grad_select"]
+
+        scaler = np.ones(dx.shape[0])
+        if self.options["return_rescaled"]:
+            scaler[:] = self.y_sca/self.x_sca[:]
+
+        davg_terms = np.zeros([dx.shape[0]])
+        terms = np.dot(h, dx)
+        terms *= scaler
+        for k in ind_use:
+            davg_terms += terms[k] * h[k,:] * scaler[k]
+        avg_terms = np.linalg.norm(terms[ind_use])
+        davg_terms /= avg_terms
+        return davg_terms
 
 
 

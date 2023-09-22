@@ -1,7 +1,7 @@
 # naming
 
 # name = 'betaex_trust_sc_demo'
-name = 'adaptive_ouu_demo'
+name = 'adaptive_ouu_demo_2'
 path = '.'
 
 
@@ -44,6 +44,8 @@ initial_trust_radius = 1.0
 ##### optimization #####
 x_init = 5.
 inexact_gradient_only = False
+approximate_truth = False
+approximate_truth_max = 5000*u_dim
 # gtol 
 # stol
 # xi
@@ -51,14 +53,21 @@ inexact_gradient_only = False
 ##### UQ Parameters #####
 u_dim = 1
 eta_use = 1.0
-N_t = 5000*u_dim
+if not approximate_truth:
+    N_t = approximate_truth_max
+else:
+    N_t = 100*u_dim
 # N_t = 500*u_dim
 N_m = 6
 jump = 10
 sample_type = 'Adaptive'
 
 ##### Collocation UQ Parameters #####
-scN_t = 48
+sc_approximate_truth_max = 48
+if not approximate_truth:
+    scN_t = sc_approximate_truth_max
+else:
+    scN_t = 8
 scN_m = 2
 scjump = 1 # stochastic collocation jump
 

@@ -231,6 +231,7 @@ def quadraticSolveHOnly(x, xn, f, fn, g, gn, return_cond=False):
         gc - solved center gradient
         Hc - solved center Hessian
     """
+    # import pdb; pdb.set_trace()
     N = g.shape[0] # problem dimension
     M = xn.shape[0] # number of points to fit
     vN = sum(range(N+1))
@@ -242,7 +243,7 @@ def quadraticSolveHOnly(x, xn, f, fn, g, gn, return_cond=False):
 
     mat = np.zeros([rsize, csize])
     rhs = np.zeros(rsize)
-    dx = xn
+    dx = xn.copy()
     for i in range(M):
         dx[i,:] -= x
 
@@ -280,7 +281,6 @@ def quadraticSolveHOnly(x, xn, f, fn, g, gn, return_cond=False):
 
     Hh = sol[0]
 
-    #import pdb; pdb.set_trace()
     if return_cond:
         return Hh, np.linalg.cond(mat)
     
@@ -727,7 +727,7 @@ def print_rc_plots(bounds, name, obj, dir=0):
                 plt.plot(valids[:,obj.sub_ind], np.zeros(valids.shape[0]), 'bo', label='Sample Locations')
         plt.legend(loc=0)
         plt.xlabel(r'$x_1$')
-        plt.ylabel(r'$\psi_{\mathrm{CV},%i}(x_1)$' % (obj.ntr-10))
+        plt.ylabel(r'$\psi_{%i}(x_1)$' % (obj.ntr))
         # wheret = np.full([ndir], True)
         # for i in range(obj.ntr):
         #     # ax.fill_betweenx([-1,0], trxs[i]-obj.S, trxs[i]+obj.S, color='r', alpha=0.2, set_edgecolor='face')
