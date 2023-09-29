@@ -336,7 +336,7 @@ class StatCompComponent(om.ExplicitComponent):
         # return current number of samples
         return self.sampler.current_samples['x'].shape[0]
     
-    def refine_model(self, N):
+    def refine_model(self, N, tol=-1.):
 
         if isinstance(N, dict):
             self.sampler.add_data(N, replace_current=True)
@@ -348,11 +348,11 @@ class StatCompComponent(om.ExplicitComponent):
             else:
                 self.sampler.N += N
             self.jump = N
-            self.sampler.refine_uncertain_points(N, func=self.func, model=self.surrogate) # second argument only works for AdaptiveSampler
+            N_act = self.sampler.refine_uncertain_points(N, tol=tol, func=self.func, model=self.surrogate) # second argument only works for AdaptiveSampler
         # reset training since the design is the same and we haven't moved
         self.first_train = False
 
-
+        return N_act
 
 
 

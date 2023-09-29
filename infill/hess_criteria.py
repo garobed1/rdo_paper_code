@@ -162,7 +162,8 @@ class HessianRefine(ASCriteria):
 
     # Assumption is that the quadratic terms are the error
     def _evaluate(self, x, bounds, dir=0):
-        
+        X_cont = np.atleast_2d(x)
+        numeval = X_cont.shape[0]
         try:
             delta = self.model.options["delta"]
         except:
@@ -177,24 +178,25 @@ class HessianRefine(ASCriteria):
         # exhaustive search for closest sample point, for regularization
         # import pdb; pdb.set_trace()
         # D = cdist(np.array([x]), trx)
-        D = cdist(x, trx)
-        mindist = min(D[0])
+        D = cdist(X_cont, trx)
+        mindist = np.min(D, axis=1)
 
-        numer = 0
-        denom = 0
 
-        for i in range(self.ntr):
-            work = x[0,:] - trx[i]
-            dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
-            local = self.higher_terms(work, None, self.H[i])*self.dV[i]*Mc[i] # NEWNEWNEW
-            expfac = np.exp(-self.rho*(dist-mindist))
-            numer += local*expfac
-            denom += expfac
+        y_ = np.zeros(numeval)
+        for k in range(numeval):
 
-        y = numer/denom
+
+            work = X_cont[k,:] - trx
+            dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+            local = self.higher_terms(work, None, self.H)*self.dV*Mc # NEWNEWNEW
+            expfac = np.exp(-self.rho*(dist-mindist[k]))
+            numer = np.dot(local, expfac)
+            denom = np.sum(expfac)
+    
+            y_[k] = numer/denom
 
         
-        ans = -abs(y)
+        ans = -abs(y_)
 
         """
         from stack: do this
@@ -212,7 +214,7 @@ class HessianRefine(ASCriteria):
         , x2=0, x3=1.
         
         """
-        
+        # import pdb; pdb.set_trace()
         # for batches, loop over already added points to prevent clustering
         for i in range(dir):
             ind = self.ntr + i
@@ -225,7 +227,9 @@ class HessianRefine(ASCriteria):
 
 
     def _eval_grad(self, x, bounds, dir=0):
-        
+        X_cont = np.atleast_2d(x)
+        numeval = X_cont.shape[0]
+        dim = X_cont.shape[1]
         try:
             delta = self.model.options["delta"]
         except:
@@ -237,32 +241,35 @@ class HessianRefine(ASCriteria):
 
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         # exhaustive search for closest sample point, for regularization
-        D = cdist(x, trx)
-        mindist = min(D[0])
+        D = cdist(X_cont, trx)
+        mindist = np.min(D, axis=1)
 
-        numer = 0
-        denom = 0
-        dnumer = np.zeros(self.dim)
-        ddenom = np.zeros(self.dim)
-        dwork = np.ones(self.dim)
+        
+        y_ = np.zeros(numeval)
+        dy_ = np.zeros([numeval, dim])
+        for k in range(numeval):
 
-        for i in range(self.ntr):
-            work = x[0,:] - trx[i]
-            dist = np.sqrt(D[0][i]**2 + delta)#np.sqrt(D[0][i] + delta)
-            ddist = (work/D[0][i])*(D[0][i]/dist)
-            local = self.higher_terms(work, None, self.H[i])*self.dV[i]*Mc[i]
-            dlocal = self.higher_terms_deriv(work, None, self.H[i])*self.dV[i]*Mc[i]
-            expfac = np.exp(-self.rho*(dist-mindist))
-            dexpfac = -self.rho*expfac*ddist
-            numer += local*expfac
-            dnumer += local*dexpfac + dlocal*expfac
-            denom += expfac
-            ddenom += dexpfac
+            # for i in range(self.ntr):
+            work = X_cont[k,:] - trx 
+            dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+            
+            local = self.higher_terms(work, None, self.H)*self.dV*Mc
+            dlocal = self.higher_terms_deriv(work, None, self.H)
+            
+            ddist = np.einsum('i,ij->ij', 1./dist, work)
+            dlocal = np.einsum('i,ij->ij', self.dV*Mc, dlocal)
 
-        y = numer/denom
-        dy = (denom*dnumer - numer*ddenom)/(denom**2)
+            expfac = np.exp(-self.rho*(dist-mindist[k]))
+            dexpfac = np.einsum('i,ij->ij',-self.rho*expfac, ddist)
+            numer = np.dot(local,expfac)
+            dnumer =  np.einsum('i,ij->j', local, dexpfac) + np.einsum('i,ij->j', expfac, dlocal)
+            denom = np.sum(expfac)
+            ddenom = np.sum(dexpfac, axis=0)
 
-        ans = -np.sign(y)*dy
+            y_[k] = numer/denom
+            dy_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
+
+        ans = np.einsum('i,ij->ij',-np.sign(y_), dy_)
 
         # for batches, loop over already added points to prevent clustering
         for i in range(dir):
@@ -282,7 +289,10 @@ class HessianRefine(ASCriteria):
         return ans
 
     def higher_terms(self, dx, g, h):
-        terms = 0.5*innerMatrixProduct(h, dx.T)
+        terms = np.zeros(dx.shape[0])
+        
+        for j in range(dx.shape[0]):
+            terms[j] = 0.5*innerMatrixProduct(h[j], dx[j].T)
 
         if self.options["return_rescaled"]:
             terms *= self.y_sca
@@ -290,9 +300,10 @@ class HessianRefine(ASCriteria):
 
     def higher_terms_deriv(self, dx, g, h):
         # terms = (g*dx).sum(axis = 1)
-        dterms = np.zeros(dx.shape[0])
+        dterms = np.zeros_like(dx)
         for j in range(dx.shape[0]):
-            dterms[j] += np.dot(h[j,:], dx)#0.5*innerMatrixProduct(h, dx)
+            for d in range(dx.shape[1]):
+                dterms[j,d] = np.dot(h[j,d,:], dx[j,:])#0.5*innerMatrixProduct(h, dx)
         
         if self.options["return_rescaled"]:
             dterms *= self.y_sca
@@ -367,35 +378,36 @@ class HessianGradientRefine(HessianRefine):
     def higher_terms(self, dx, g, h):
 
         # terms = np.zeros([dx.shape[0]])
-        ind_use = [l for l in range(dx.shape[0])]
+        ind_use = [l for l in range(dx.shape[1])]
         if self.options["grad_select"] is not None: 
             ind_use = self.options["grad_select"]
 
-        terms = np.dot(h, dx)
+        # terms = np.dot(h, dx)
+        terms = np.einsum('ijk, ik->ij', h, dx)
         
         if self.options["return_rescaled"]:
-            terms *= self.y_sca/self.x_sca
+            terms = np.einsum('j,ij->ij',self.y_sca/self.x_sca, terms)
 
-        avg_terms = np.linalg.norm(terms[ind_use])
+        avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         return avg_terms
 
     def higher_terms_deriv(self, dx, g, h):
         
-        ind_use = [l for l in range(dx.shape[0])]
+        ind_use = [l for l in range(dx.shape[1])]
         if self.options["grad_select"] is not None: 
             ind_use = self.options["grad_select"]
 
-        scaler = np.ones(dx.shape[0])
+        scaler = np.ones(dx.shape[1])
         if self.options["return_rescaled"]:
             scaler[:] = self.y_sca/self.x_sca[:]
 
-        davg_terms = np.zeros([dx.shape[0]])
-        terms = np.dot(h, dx)
-        terms *= scaler
-        for k in ind_use:
-            davg_terms += terms[k] * h[k,:] * scaler[k]
-        avg_terms = np.linalg.norm(terms[ind_use])
-        davg_terms /= avg_terms
+        davg_terms = np.zeros_like(dx)
+        terms = np.einsum('ijk, ik->ij', h, dx)
+        terms = np.einsum('j,ij->ij',scaler, terms)
+            
+        davg_terms = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use], scaler[ind_use])
+        avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
+        davg_terms = np.einsum('ij,i->ij', davg_terms, 1./avg_terms)
         return davg_terms
 
 

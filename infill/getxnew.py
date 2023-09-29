@@ -80,6 +80,7 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
             x0, lbounds = rcrit.pre_asopt(bounds, dir=i)
             x0 = qmc.scale(x0, bounds_used[:,0], bounds_used[:,1], reverse=True)
             m, n = x0.shape
+            n_u = len(sub_ind)
             if(lbounds is not None):
                 bounds_used = lbounds
             args=(bounds_used, i,)
@@ -92,7 +93,7 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
 
                 # proper multistart
                 if(options["multistart"] == 2):
-                    resx = np.zeros([m,n])
+                    resx = np.zeros([m,n_u])
                     resy = np.zeros(m)
                     succ = np.full(m, True)
                     for j in range(m):
@@ -140,20 +141,38 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
     return xnew
 
 
+"""
+Run Adaptive Sampling
 
-def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
+Inputs:
+    func: SMT Function to Evaluate
+    model0: SMT Surrogate to Add Samples to
+    rcrit: Criteria Function to Guide Sampling
+    bounds: Input Domain Limits
+    ntr: Maximum number of points to add during call
+    e_tol: rcrit energy tolerance to meet before stopping, only applies if rcrit energy is possible and value is greater than 0.
+    batch: number of points to generate before computing function, only some rcrit support
+    options: getxnew specific options
+"""
+def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=-1., batch=1, options=None):
 
     count = int(np.ceil(ntr/batch))
     hist = []
     errh = []
     errh2 = []
     model = copy.deepcopy(model0)
+    tol_condition = (e_tol > 0.) and rcrit.options["print_energy"]
+    tol_met = False
 
     if(rcrit.options["print_iter"] and rank == 0):
         print(f"___________________________________________________________________________")
         print(f"O       Begin Adaptive Sampling")
         print(f"O       Criteria = {rcrit.name}| Function = {func.options['name']} | Model = {model0.name}")
-        print(f"O       Added Points = {ntr} | Batch Size = {batch} | Steps = {count}")
+        print(f"O       Added Points = {ntr} | Batch Size = {batch} | ", end='')
+        if tol_condition:
+            print(f"Max Steps = {count} | Target = {e_tol}")
+        else:
+            print(f"Steps = {count}")
         print(f"___________________________________________________________________________")
     # index batch sizes
     batch_use = count*[batch]
@@ -162,6 +181,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
         batch_use[-1] = ntr % batch
 
     intervals = np.arange(0, count+1)
+    added = 0
     for i in range(count):
         # try:
         if 1:
@@ -177,6 +197,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
             t0 = np.append(t0, xnew, axis=0)
             f0 = np.append(f0, func(xnew), axis=0)
             g0 = np.append(g0, convert_to_smt_grads(func, xnew), axis=0)
+            added += batch_use[i]
             # g0 = np.append(g0, np.zeros([xnew.shape[0], xnew.shape[1]]), axis=0)
             # for j in range(dim):
             #     g0[nt:,j] = func(xnew, j)[:,0]
@@ -210,18 +231,36 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, batch=1, options=None):
             if i in intervals.tolist():
                 hist.append(copy.deepcopy(rcrit.model.training_points[None]))        
 
+            en = 0.
             if(rcrit.options["print_iter"] and rank == 0):
                 print(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
                 if rcrit.options["print_energy"]:
                     en = rcrit.get_energy(bounds)
-                    print(f", Energy = {en}")
+                    if tol_condition:
+                        print(f", Energy = {en}, Target = {e_tol}")
+                    else:
+                        print(f", Energy = {en}")
                 else:
                     print('')
                 
             # replace criteria
             rcrit.initialize(model, g0)
+
+            # convergence check
+            if tol_condition and en < e_tol:
+                tol_met = True
+                break
         # except:
         #     print(f"Run on processor {rank} failed, returning what we have")
         #     continue
-        
+    if tol_condition and tol_met:
+        print(f"O       Adaptive Sampling Complete, Tolerance Achieved with {added} Points Added")
+    elif tol_condition and not tol_met:
+        print(f"O       Adaptive Sampling Complete, Tolerance Not Achieved with {added} Points Added")
+    else: 
+        print(f"O       Adaptive Sampling Complete, {added} Points Added")
+
+
+
+
     return model, rcrit, hist, errh, errh2

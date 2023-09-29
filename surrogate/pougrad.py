@@ -232,7 +232,7 @@ class POUSurrogate(SurrogateModel):
             # for i in range(numsample):
             work = x - xc
             dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
-            ddist = (work[:,kx]/D[k,:])*(D[k,:]/dist)
+            ddist = work[:,kx]/dist
 
             expfac = np.exp(-rho*(dist-mindist[k]))
             dexpfac = -rho*expfac*ddist

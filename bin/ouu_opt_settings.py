@@ -1,7 +1,7 @@
 # naming
 
 # name = 'betaex_trust_sc_demo'
-name = 'adaptive_ouu_demo_2'
+name = 'adaptive_ouu_demo_3'
 path = '.'
 
 
@@ -19,7 +19,7 @@ prob = 'betatestex'
 ref_strategy = 2
 
 ##### surrogate #####
-use_truth_to_train = False #NEW, ONLY IF USING SURR
+use_truth_to_train = True #NEW, ONLY IF USING SURR
 use_surrogate = True
 full_surrogate = True
 retain_uncertain_points = False
@@ -44,8 +44,10 @@ initial_trust_radius = 1.0
 ##### optimization #####
 x_init = 5.
 inexact_gradient_only = False
+approximate_model = True
 approximate_truth = False
 approximate_truth_max = 5000*u_dim
+trust_increase_terminate = False
 # gtol 
 # stol
 # xi
@@ -76,7 +78,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 10
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

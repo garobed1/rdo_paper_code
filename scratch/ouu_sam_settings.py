@@ -39,7 +39,7 @@ rho = 10
 nt0  = 10       #initial design size
 ntr = 40      #number of points to add
 ntot = nt0 + ntr    #total number of points
-batch = 5#dim*2        #batch size for refinement, as a percentage of ntr
+batch = 1#dim*2        #batch size for refinement, as a percentage of ntr
 mstarttype = 2            # 0: No multistart
                           # 1: Start at the best out of a number of samples
                           # 2: Perform multiple optimizations

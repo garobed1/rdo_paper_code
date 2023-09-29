@@ -70,7 +70,8 @@ class UncertainTrust(OptSubproblem):
 
         declare(
             "xi", 
-            default=0.01, 
+            # default=0.01, 
+            default=1.00, 
             types=float,
             desc="coefficient for inexact gradient condition"
         )
@@ -121,6 +122,12 @@ class UncertainTrust(OptSubproblem):
             default=False, 
             types=bool,
             desc="Use an estimate of the validation function error to drive validation refinement"
+        )
+        declare(
+            "truth_func_err_est_max", 
+            default=500, 
+            types=int,
+            desc="Maximum validation sampling level"
         )
 
         declare(
@@ -203,7 +210,7 @@ class UncertainTrust(OptSubproblem):
         
         """
 
-        gtol = self.options['gtol']
+        self.gtol = self.options['gtol']
         stol = self.options['stol']
         miter = self.options['max_iter']
         max_trust_radius = self.options['max_trust_radius']
@@ -213,7 +220,7 @@ class UncertainTrust(OptSubproblem):
         eta_2 = self.options['eta_2']
         gamma_1 = self.options['gamma_1']
         gamma_2 = self.options['gamma_2']
-        xi = self.options["xi"]
+        self.xi = self.options["xi"]
         
 
         if not (0 <= eta_0 < 1.0):
@@ -259,7 +266,7 @@ class UncertainTrust(OptSubproblem):
         # store error measures, including the first one
         gerr0 = 0
         ferr = 1e6
-        gerr = 1e6
+        self.gerr = 1e6
 
         # get DV bounds
         dvbl = {}
@@ -270,7 +277,7 @@ class UncertainTrust(OptSubproblem):
 
         # we assume that fidelity belongs to the top level system
         # calling it stat for now
-        reflevel = self.prob_model.model.stat.get_fidelity()
+        self.reflevel = self.prob_model.model.stat.get_fidelity()
         refjump = self.options["flat_refinement"]
         #TODO: Need constraint conditions as well
 
@@ -279,19 +286,20 @@ class UncertainTrust(OptSubproblem):
         zk = z0
 
         # validate the first point before starting
-        self._eval_truth(zk)
-        ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
-        #TODO: this needs to be the lagrangian gradient with constraints
-        gtru = self.prob_truth.compute_totals(return_format='array')
-        gerr = np.linalg.norm(gtru)
-        gerr0 += gerr
-        grange = gerr0 - gtol
-        if self.options["print"]:
-            getext = str(gerr)
+        if not self.options["model_grad_err_est"]:
+            self._eval_truth(zk)
+            ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
+            #TODO: this needs to be the lagrangian gradient with constraints
+            self.gtru = self.prob_truth.compute_totals(return_format='array')
+            self.gerr = np.linalg.norm(self.gtru)
+            gerr0 += self.gerr
+            self.grange = gerr0 - self.gtol
+            if self.options["print"]:
+                getext = str(self.gerr)
 
         print(f"___________________________________________________________________________")
         print(f"Optimization Parameters")
-        print(f"Gradient Tolerance         = {gtol}")
+        print(f"Gradient Tolerance         = {self.gtol}")
         print(f"Step Tolerance             = {stol}")
         print(f"Maximum Outer Iterations   = {miter}")
         print(f"Initial Trust Radius       = {initial_trust_radius}")
@@ -302,7 +310,7 @@ class UncertainTrust(OptSubproblem):
         print(f"___________________________________________________________________________")
         print(f"Beginning Full Optimization-Under-Uncertainty Loop")
 
-        while (gerr > gtol) and (k < miter):
+        while (self.gerr > self.gtol) and (k < miter):
             fail = 100
             if self.options["print"]:
                 print("\n")
@@ -313,7 +321,7 @@ class UncertainTrust(OptSubproblem):
                 # Add constraint loop as well
                 print(f"    -")
                 print(f"    GRD ERR: {getext}")
-                print(f"    Fidelity: {reflevel}")
+                print(f"    Fidelity: {self.reflevel}")
                 
                 self.prob_model.list_problem_vars()
             
@@ -348,6 +356,7 @@ class UncertainTrust(OptSubproblem):
             fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             self._solve_subproblem(zk)  
             fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
+            zk_cand = self.prob_model.driver.get_design_var_values()
             # self.prob_model.model.stat.check_partials_flag = True
             # self.prob_model.check_partials()
             # self.prob_model.model.stat.check_partials_flag = False
@@ -358,12 +367,43 @@ class UncertainTrust(OptSubproblem):
             # predicted_reduction = ftru_cent - fmod_cand #TODO: how to handle this?
             self.pred = predicted_reduction
             
+            # retrieve gradients information
+            # import pdb; pdb.set_trace()
+            # this needs to be the lagrangian gradient with constraints
+            gmod = self.prob_model.compute_totals(return_format='array')
+            gerrm = np.linalg.norm(gmod)
+        
+            # need distance of prediction, and if its on edge of radius
+            # the dv arrays originate from OrderedDict objects, so this should be fine
+            zce_arr = om_dict_to_flat_array(zk_cent, dvsettings, dvsize)
+            zca_arr = om_dict_to_flat_array(zk_cand, dvsettings, dvsize)
+            s = zca_arr - zce_arr
+            self.sdist = np.linalg.norm(s)
+            if self.options["print"]:
+                print(f"o       Step Size = {self.sdist}, Step Tol = {stol}")
             
-            if self.options["use_truth_to_train"]:
+            if self.options["model_grad_err_est"]:
+                # Compare to refined model
                 if self.options["print"]:
                     print(f"___________________________________________________________________________")
                     print(f"")
                     print(f"OOO     Step 2: Validating by Refining Model...")
+                
+                # Estimate the inexact gradient condition now rather than later
+                # lhs0 = lhs = self.prob_model.model.stat.sampler.rcrit.get_energy()#np.linalg.norm(gmod-gtru)
+                lhs0 = None
+                rhs0 = min(gerrm, self.sdist)
+                # xi_calc = lhs0/rhs0
+
+                lhs, rhs = self.model_refiner(lhs0, rhs0)
+
+                # recompute model
+                self.prob_model.run_model()
+                fmod_cand_star = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
+
+                actual_reduction = fmod_cent - fmod_cand_star
+            
+            
             else:
                 #Eval Truth
                 if self.options["print"]:
@@ -371,10 +411,6 @@ class UncertainTrust(OptSubproblem):
                     print(f"")
                     print(f"OOO     Step 2: Validating by Computing Truth...")
 
-
-
-
-                zk_cand = self.prob_model.driver.get_design_var_values()
                 ftru_cent = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
                 self._eval_truth(zk_cand)
                 ftru_cand = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
@@ -394,17 +430,8 @@ class UncertainTrust(OptSubproblem):
                 print(f"OOO     Step 3: Validating Subproblem Reduction with Truth...")
             
             
-            
-            # need distance of prediction, and if its on edge of radius
-            # the dv arrays originate from OrderedDict objects, so this should be fine
-            zce_arr = om_dict_to_flat_array(zk_cent, dvsettings, dvsize)
-            zca_arr = om_dict_to_flat_array(zk_cand, dvsettings, dvsize)
-            s = zca_arr - zce_arr
-            sdist = np.linalg.norm(s)
-            if self.options["print"]:
-                print(f"o       Step Size = {sdist}, Step Tol = {stol}")
             # If the predicted step size is small enough
-            if sdist < stol:
+            if self.sdist < stol:
                 fail = 0
                 succ = 3
                 break
@@ -428,21 +455,31 @@ class UncertainTrust(OptSubproblem):
             # updated/refined model, need to make this an option
             eta_k_act = eta_k
 
+
+
+
             # =================================================================
             # 4.
             #   adjust trust radius
             # =================================================================
             
+            if self.options["print"]:
+                print(f"___________________________________________________________________________")
+                print(f"")
+                print(f"OOO     Step 4: Modifying Trust Bounds...")
+                print(f"O       Prior Radius = {trust_radius}")
             
             # a few ways of doing this
             # bad prediction, reduce radius to fraction of candidate distance
             # right now this is Rodriguez (1998), if eta_0 and eta_1 are the same
             if not accept:
                 # trust_radius = gamma_1*trust_radius
-                trust_radius = gamma_1*sdist
+                trust_radius = gamma_1*self.sdist
             # remaining conditions apply for accepted steps
             elif eta_k_act < eta_1:
                 trust_radius = gamma_1*trust_radius
+                if self.options["print"]:
+                    print(f"O       eta = {eta_k_act} < {eta_1}, Reducing")
             elif eta_k_act > eta_2:
                 # check if trust constraint is active AKA we are on the boundary
                 if self.trust_opt == 1:
@@ -455,149 +492,83 @@ class UncertainTrust(OptSubproblem):
                 if trustconval < 1e-6: #NOTE: should change how we do this
                     trust_radius = gamma_2*trust_radius
 
+                if self.options["print"]:
+                    print(f"O       eta = {eta_k_act} > {eta_2}, Increasing")
+            else:
+                if self.options["print"]:
+                    print(f"O       eta = {eta_k_act} < {eta_2}, > {eta_1}, Not Changing")
+
+            if self.options["print"]:
+                print(f"O       New Radius = {trust_radius}")
+
             if self.trust_opt == 1:
                 self.prob_model.model.trust.set_radius(trust_radius)
 
-            # import pdb; pdb.set_trace()
-            # this needs to be the lagrangian gradient with constraints
-            gmod = self.prob_model.compute_totals(return_format='array')
-            gerrm = np.linalg.norm(gmod)
 
-            # define the LHS, compute gtru depennding on how we do this
+
+
+
+
+            # define the LHS, compute gtru depending on how we do this
             if not self.options["model_grad_err_est"]: # get the actual gradient error
-                gtru = self.prob_truth.compute_totals(return_format='array')
-                gerr = np.linalg.norm(gtru)
+                self.gtru = self.prob_truth.compute_totals(return_format='array')
+                self.gerr = np.linalg.norm(self.gtru)
 
+                lhs0 = np.linalg.norm(gmod-self.gtru)
+                rhs0 = min(gerrm, self.sdist)
+                xi_calc = lhs0/rhs0
                 # def compute_lhs():
             else:
-                gtru = 10.
-                gerr = gerrm 
+                self.gtru = gmod
+                self.gerr = gerrm 
+                lhs0 = lhs
+                rhs0 = rhs
+
 
             # ferr = abs(fmod-ftru)
 
             # try the condition from Kouri (2013)?
-            # import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace(
 
-            # also introduce a step tolerance, sdist < stol
-
+            # also introduce a step tolerance, self.sdist < stol
             if k == 0:
-                gerr0 += gerr
-                grange = gerr0 - gtol
+                gerr0 += self.gerr
+                self.grange = gerr0 - self.gtol
 
             fetext = str(ferr)
-            getext = str(gerr)
+            getext = str(self.gerr)
 
-            # compute inexact gradient condition
-            lhs0 = np.linalg.norm(gmod-gtru)
-            rhs0 = min(gerrm, sdist)
-            xi_calc = lhs0/rhs0
 
             #If g truth metrics are not met, 
-            if gerr < gtol and not self.options["inexact_gradient_only"]:
+            if self.gerr < self.gtol and not self.options["inexact_gradient_only"]:
                 fail = 0
                 succ = 1
                 break
 
             # Alternatively, use the inexact gradient condition
-            if lhs0 < xi*rhs0 and gerrm < gtol:
+            if lhs0 < self.xi*rhs0 and gerrm < self.gtol:
                 fail = 0
                 succ = 2
                 break
+            import pdb; pdb.set_trace()
 
+            # if we used the "truth" function to check refinement, we need to do this step now
+            if not self.options["model_grad_err_est"]:
+                if self.options["print"]:
+                    print(f"___________________________________________________________________________")
+                    print(f"")
+                    print(f"OOO     Step 5: Refining to Meet Inexact Gradient Conditions...")
             
-            if self.options["print"]:
-                print(f"___________________________________________________________________________")
-                print(f"")
-                print(f"OOO     Step 5: Refining to Meet Inexact Gradient Conditions...")
             
-            if(self.options["ref_strategy"] == 1):
-                grel = gerr-gtol
-                gclose = 1. - grel/grange
-                rmin = self.options["flat_refinement"] #minimum improvement
-                rcap = self.prob_truth.model.stat.get_fidelity()
-
-                fac = gclose - reflevel/rcap
-
-                refjump = rmin + max(0, int(fac*rcap))
-                if self.options["print"]:
-                    print(f"O       Strategy = Proximity to Convergence")
-                    print(f"O       Relative Proximity = {gclose}| Minimum Refinement = {rmin}")
-                    print(f"O       Current Level = {reflevel}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
-                # import pdb; pdb.set_trace()
-
-
-            # Ensure that the inexact gradient condition is met by adding enough points
-            # \|\Nabla m_k(z_k) - \Nabla J(z_k)\| \leq \xi min(\|\Nabla m_k(z_k)\|, sdist)
-            # or lhs = \xi rhs
-            # \xi = 0.01 default
-            # Question remains on how to ensure this with enough points
-            # Report this for each iteration
-            lhs = lhs0
-            rhs = rhs0
-            if(self.options["ref_strategy"] == 2):
-                # for now, fully calculate the new lhs and rhs
-
-                rmin = self.options["flat_refinement"] #minimum improvement
-                rcap = self.prob_truth.model.stat.get_fidelity()
-                # rcap = self.options["ref_cap"]
-                if self.options["print"]:
-                    print(f"O       Strategy = Satisfy Inexact Gradient Condition")
-                    print(f"O       Minimum Refinement = {rmin}| xi = {xi}")
-                rk = 0
-                while(lhs > xi*rhs and reflevel < rcap):
-                    rk += 1
-                    refjump = rmin
-                    estat = 'flat'
-                    if self.options["use_energy"]:
-                        estat = 'not implemented'
-                        refjump = max(rmin, rmin) #TODO: Implement this with adaptive refinement criteria, or gradient criteria error?
-                    # import pdb; pdb.set_trace()
-                    self.prob_model.model.stat.refine_model(refjump)
-                    reflevel += refjump
-                    self.prob_model.run_model()
-                    
-                    gmod = self.prob_model.compute_totals(return_format='array')
-                    gerrm = np.linalg.norm(gmod)
-                    lhs = np.linalg.norm(gmod-gtru)
-                    rhs = min(gerrm, sdist)
-                    
-                    if self.options["print"]:
-                        print(f"o       Inexact Iter: {rk} | Energy = {estat}| New Level = {reflevel}| LHS = {lhs}| RHS: {rhs}| xi*RHS - LHS = {rhs*xi - lhs}")
-                
-                if self.options["print"]:
-                    if lhs < xi*rhs:
-                        print(f"o       Inexact Gradient Condition Satisfied in {rk} Iterations with {reflevel} Points")
-                    else:
-                        print(f"o       Max Iterations Reached before Satisfaction, Continue with {reflevel} Points")
-
-            else:
-
-                #NOTE: Replacing this with earlier refinement, see Step 2.
-                # # grab sample data from the truth model if we are using a surrogate
-                # if self.prob_model.model.stat.surrogate and self.options["use_truth_to_train"]:
-                #     truth_eval = self.prob_truth.model.stat.sampler.current_samples
-                #     refjump = truth_eval['x'].shape[0]
-                #     if self.options["print"]:
-                #         print(f"O       Strategy = Refine with Validation Points")
-                #         print(f"O       Level Remains Static| Points Added = {refjump}")
-                #     self.prob_model.model.stat.refine_model(truth_eval)
-                #     reflevel = self.prob_model.model.stat.xtrain_act.shape[0]
-                # else:
-
-                if self.options["print"]:
-                    print(f"O       Strategy = Flat Refinement")
-                    print(f"O       Current Level = {reflevel}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
-                self.prob_model.model.stat.refine_model(refjump)
-                reflevel += refjump
-
+                lhs, rhs = self.model_refiner()
 
             k += 1            
             self.outer_iter = k
             self.grad_lhs.append(lhs)
             self.grad_rhs.append(rhs)
-            print(f"LHS: {lhs}")
-            print(f"RHS: {rhs}")
-            print(f"xi*RHS - LHS = {rhs*xi - lhs}")
+            print(f"O       LHS: {lhs}")
+            print(f"O       RHS: {rhs}")
+            print(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
             # import pdb; pdb.set_trace()
 
         if fail:
@@ -612,7 +583,7 @@ class UncertainTrust(OptSubproblem):
                 f'successfully!',
                 f'successfully, true gradient norm below tolerance: {getext}',
                 f'successfully, inexact gradient condition met and model gradient norm below tolerance: {gerrm}',
-                f'successfully, step size below tolerance: {sdist}'
+                f'successfully, step size below tolerance: {self.sdist}'
             )
             message = success_messages[succ]
 
@@ -630,10 +601,108 @@ class UncertainTrust(OptSubproblem):
         print(f"    Final truth gradient norm: {getext}")
         print(f"    Final model gradient norm: {gerrm}")
         print(f"    Final model error: {fetext}")
-        print(f"    Final model level: {reflevel}")
+        print(f"    Final model level: {self.reflevel}")
 
         print(f"    Total model samples: {self.model_iters}")
         print(f"    Total truth samples: {self.truth_iters}")
         print(f"    Total samples: {self.model_iters + self.truth_iters}")
             
 
+
+    def model_refiner(self, lhs0, rhs0):
+        """
+        Refine the model based on options
+
+        """
+
+        # only use if we have a truth model
+        rcap = self.prob_truth.model.stat.get_fidelity()
+        if(self.options["ref_strategy"] == 1) and not self.options["model_grad_err_est"]:
+            grel = self.gerr-self.gtol
+            gclose = 1. - grel/self.grange
+            rmin = self.options["flat_refinement"] #minimum improvement
+
+            fac = gclose - self.reflevel/rcap
+
+            refjump = rmin + max(0, int(fac*rcap))
+            if self.options["print"]:
+                print(f"O       Strategy = Proximity to Convergence")
+                print(f"O       Relative Proximity = {gclose}| Minimum Refinement = {rmin}")
+                print(f"O       Current Level = {self.reflevel}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
+            # import pdb; pdb.set_trace()
+
+
+        # Ensure that the inexact gradient condition is met by adding enough points
+        # \|\Nabla m_k(z_k) - \Nabla J(z_k)\| \leq \xi min(\|\Nabla m_k(z_k)\|, self.sdist)
+        # or lhs = \xi rhs
+        # \xi = 0.01 default
+        # Question remains on how to ensure this with enough points
+        # Report this for each iteration
+        lhs = lhs0
+        rhs = rhs0
+        if(self.options["ref_strategy"] == 2):
+            # for now, fully calculate the new lhs and rhs
+
+            rmin = self.options["flat_refinement"] #minimum improvement
+            rcap = self.prob_truth.model.stat.get_fidelity()
+            # rcap = self.options["ref_cap"]
+            if self.options["print"]:
+                print(f"O       Strategy = Satisfy Inexact Gradient Condition")
+                print(f"O       Minimum Refinement = {rmin}| xi = {self.xi}")
+            rk = 0
+            if lhs == None:
+                lhs = 1.e6
+            while(lhs > self.xi*rhs and self.reflevel < rcap):
+                rk += 1
+                refjump = rmin
+                estat = 'flat'
+                      # import pdb; pdb.set_trace()
+                if self.options["model_grad_err_est"]:
+                    estat = 'adaptive'
+                    refjump_max = max(rmin, self.options["truth_func_err_est_max"])
+                    refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
+                else:
+                    refjump = self.prob_model.model.stat.refine_model(refjump)
+                    
+                self.reflevel += refjump
+                self.prob_model.run_model()
+                
+                import pdb; pdb.set_trace()
+
+                gmod = self.prob_model.compute_totals(return_format='array')
+                gerrm = np.linalg.norm(gmod)
+                if not self.options["model_grad_err_est"]:
+                    lhs = np.linalg.norm(gmod-self.gtru)
+                else:
+                    lhs = self.prob_model.model.stat.sampler.rcrit.get_energy(self.prob_model.model.stat.sampler.xlimits)
+                rhs = min(gerrm, self.sdist)
+
+                if self.options["print"]:
+                    print(f"o       Inexact Iter: {rk} | Energy = {estat}| New Level = {self.reflevel}| LHS = {lhs}| RHS: {rhs}| xi*RHS - LHS = {rhs*self.xi - lhs}")
+            if self.options["print"]:
+                if lhs < self.xi*rhs:
+                    print(f"o       Inexact Gradient Condition Satisfied in {rk} Iterations with {self.reflevel} Points")
+                else:
+                    print(f"o       Max Iterations Reached before Satisfaction, Continue with {self.reflevel} Points")
+
+        else:
+
+            #NOTE: Replacing this with earlier refinement, see Step 2.
+            # # grab sample data from the truth model if we are using a surrogate
+            # if self.prob_model.model.stat.surrogate and self.options["use_truth_to_train"]:
+            #     truth_eval = self.prob_truth.model.stat.sampler.current_samples
+            #     refjump = truth_eval['x'].shape[0]
+            #     if self.options["print"]:
+            #         print(f"O       Strategy = Refine with Validation Points")
+            #         print(f"O       Level Remains Static| Points Added = {refjump}")
+            #     self.prob_model.model.stat.refine_model(truth_eval)
+            #     reflevel = self.prob_model.model.stat.xtrain_act.shape[0]
+            # else:
+
+            if self.options["print"]:
+                print(f"O       Strategy = Flat Refinement")
+                print(f"O       Current Level = {self.reflevel}/{rcap}| Jump = {refjump}| New Level = {self.reflevel+refjump}/{rcap}")
+            self.prob_model.model.stat.refine_model(refjump)
+            self.reflevel += refjump
+
+        return lhs, rhs

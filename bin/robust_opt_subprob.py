@@ -112,10 +112,10 @@ max_outer = oset.max_outer
 trust_region_bound = oset.trust_region_bound
 initial_trust_radius = oset.initial_trust_radius
 inexact_gradient_only = oset.inexact_gradient_only
+approximate_model = oset.approximate_model
 approximate_truth = oset.approximate_truth
 approximate_truth_max = oset.approximate_truth_max
-
-
+trust_increase_terminate = oset.trust_increase_terminate
 
 
 ### SAMPLING STRATEGY ###
@@ -204,7 +204,8 @@ elif(sample_type == 'Adaptive'):
                           xlimits=xlimits, 
                           probability_functions=pdfs, 
                           as_options=as_options,
-                          retain_uncertain_points=retain_uncertain_points)
+                          retain_uncertain_points=retain_uncertain_points,
+                          external_only=external_only)
 else:
     sampler_m = RobustSampler(np.array([x_init]), N=N_m, 
                           name='model', 
@@ -240,23 +241,24 @@ probt.setup()
 probt.run_model()
 
 ### ORIGINAL FUNCTION PLOT ###
-ndir = 600
-x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
-y = np.zeros([ndir])
-for j in range(ndir):
-    probt.set_val("stat.x_d", x[j])
-    probt.run_model()
-    y[j] = probt.get_val("stat.musigma")
-minind = np.argmin(y)
-plt.plot(x, y, label='objective')
-print(f"x* = {x[minind]}")
-print(f"y* = {y[minind]}")
-plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
-plt.xlabel(r'$x_d$')
-plt.ylabel(r'$S(x_d)$')
-plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
+# ndir = 600
+# x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
+# y = np.zeros([ndir])
+# for j in range(ndir):
+#     probt.set_val("stat.x_d", x[j])
+#     probt.run_model()
+#     y[j] = probt.get_val("stat.musigma")
+# minind = np.argmin(y)
+# plt.plot(x, y, label='objective')
+# print(f"x* = {x[minind]}")
+# print(f"y* = {y[minind]}")
+# plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+# plt.xlabel(r'$x_d$')
+# plt.ylabel(r'$S(x_d)$')
+# plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
+
 """ 
 raw optimization section
 """
@@ -328,8 +330,10 @@ if trust_region_bound: #anything but 0
                                     use_truth_to_train=use_truth_to_train,
                                     inexact_gradient_only=inexact_gradient_only,
                                     ref_strategy=ref_strategy,
-                                    approximate_truth=approximate_truth,
-                                    approximate_truth_max=approximate_truth_max)
+                                    model_grad_err_est=approximate_model,
+                                    truth_func_err_est=approximate_truth,
+                                    truth_func_err_est_max=approximate_truth_max,
+                                    trust_increase_terminate=trust_increase_terminate)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
                                     flat_refinement=jump, 

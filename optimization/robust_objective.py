@@ -165,7 +165,7 @@ class RobustSampler():
 
         return tx
 
-    def _refine_sample(self, N):
+    def _refine_sample(self, N, e_tol=-1.):
         tx = self.current_samples['x']
         noise = self.options["design_noise"]
 
@@ -219,7 +219,7 @@ class RobustSampler():
         if np.allclose(x_d_buf, self.x_d_cur, rtol = 1e-15, atol = 1e-15):
             print(f": No change in design, no data added")
             return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
-
+        # import pdb; pdb.set_trace()
         if not self.options["external_only"]:
             self.has_points = False
             if self.options["retain_uncertain_points"]:
@@ -271,7 +271,7 @@ class RobustSampler():
 
         return 1
 
-    def refine_uncertain_points(self, N, func=None, model=None):
+    def refine_uncertain_points(self, N, tol=-1., func=None, model=None):
         """
         Second of two functions that will increment the sampling iteration
         Add more UQ points to the current design. Usually this is nested
@@ -284,18 +284,24 @@ class RobustSampler():
         # check if we already have them NOTE: EVEN IF A DIFFERENT NUMBER IS REQUESTED FOR NOW
         if self.has_points and N is None:
             print(f"{self.options['name']} Iter {self.iter_max}: No refinement requested, no points generated")
-            return
+            return 0
+
+        told = self.current_samples['x'].shape[0]
 
         print(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
         self.func = func
         self.model = model
-        tx = self._refine_sample(N)
+        tx = self._refine_sample(N, e_tol=tol)
 
         # archive previous dataset
         self._internal_save_state(refine=True)
         
         self.current_samples['x'] = tx
         self.has_points = True
+
+        tdiff = tx.shape[0] - told
+
+        return tdiff
 
     def set_evaluated_func(self, f):
 
@@ -537,7 +543,7 @@ class CollocationSampler(RobustSampler):
         # import pdb; pdb.set_trace()
         return tx
 
-    def _refine_sample(self, N):
+    def _refine_sample(self, N, e_tol=-1.):
         N_old = self.N
 
         if isinstance(N, int):
@@ -605,8 +611,9 @@ class AdaptiveSampler(RobustSampler):
         self.rset = self.options['criteria']
         self.rcrit = None # can only initialize this once we initialize the surrogate
 
-        # u_xlimits = self.xlimits[self.x_u_ind]
-        self.sampling = LHS(xlimits=self.xlimits, criterion='maximin')
+        u_xlimits = self.xlimits[self.x_u_ind]
+        # self.sampling = LHS(xlimits=self.xlimits, criterion='maximin')
+        self.sampling = LHS(xlimits=u_xlimits, criterion='maximin')
 
         self.surrogate_initialized = False
 
@@ -645,20 +652,20 @@ class AdaptiveSampler(RobustSampler):
 
         # if model already exists, use _refine_sample instead
         if self.model is not None:
-            tx = self._refine_sample(N)
+            u_tx = self._refine_sample(N)
         else:
-            tx = self.sampling(N)
+            u_tx = self.sampling(N)
         
         
-        # tx = np.zeros([N, self.dim])
-        # tx[:, self.x_u_ind] = u_tx
-        # tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
+        tx = np.zeros([N, self.dim])
+        tx[:, self.x_u_ind] = u_tx
+        tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
 
 
         return tx
 
 
-    def _refine_sample(self, N):
+    def _refine_sample(self, N, e_tol=-1.):
         
         max_batch = self.options['max_batch']
         as_options = self.options['as_options']
@@ -687,7 +694,7 @@ class AdaptiveSampler(RobustSampler):
 
         # perform adaptive sampling
         # import pdb; pdb.set_trace()
-        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, batch=batch_use, options=as_options)
+        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, e_tol = e_tol, batch=batch_use, options=as_options)
 
 
         self.rcrit = rF

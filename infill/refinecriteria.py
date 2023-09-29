@@ -143,17 +143,17 @@ class ASCriteria():
         # NOTE: xc not doing anything here
 
         # ### FD CHECK
-        h = 1e-6
-        zero = 0.5*np.ones([1,bounds.shape[0]])
-        step = 0.5*np.ones([1,bounds.shape[0]])
-        step[0,0] += h
-        ad = self.eval_grad(zero, bounds, dir)
-        fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        step = 0.5*np.ones([1,bounds.shape[0]])
-        step[0,1] += h
-        fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        fd = [fd1, fd2]
-        import pdb; pdb.set_trace()
+        # h = 1e-6
+        # zero = 0.5*np.ones([1,bounds.shape[0]])
+        # step = 0.5*np.ones([1,bounds.shape[0]])
+        # step[0,0] += h
+        # ad = self.eval_grad(zero, bounds, dir)
+        # fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        # step = 0.5*np.ones([1,bounds.shape[0]])
+        # step[0,1] += h
+        # fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        # fd = [fd1, fd2]
+        # import pdb; pdb.set_trace()
 
         ### Get Reduced Space
         dim_r = len(self.sub_ind)
@@ -169,7 +169,7 @@ class ASCriteria():
         if(ntries > 1):
             xc_r = sampling(ntries)
         else: 
-            xc_r = np.random.rand(self.dim)*(bounds_r[:,1] - bounds_r[:,0]) + bounds_r[:,0]
+            xc_r = np.random.rand(dim_r)*(bounds_r[:,1] - bounds_r[:,0]) + bounds_r[:,0]
             xc_r = np.array([xc_r])
 
         ### Batches

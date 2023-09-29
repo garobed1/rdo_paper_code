@@ -5,11 +5,13 @@ runs_per_proc = 1
 stype = "gekpls"   #surrogate type
 
 ### FOR POU HESS
-rtype =  "hess"
+rtype =  "hessgrad"
 opt = 'L-BFGS-B' #'SLSQP'#
-local = False
+local = True
 gopt = 'ga' #'brute'
 localswitch = True
+rsca = True  # hess function value scale
+vsca = False # hess cell volume scale
 
 ### FOR POU SFCVT
 # rtype =  "pousfcvt"
@@ -39,7 +41,7 @@ rho = 10
 nt0  = 10       #initial design size
 ntr = 40      #number of points to add
 ntot = nt0 + ntr    #total number of points
-batch = 5#dim*2        #batch size for refinement, as a percentage of ntr
+batch = 1#dim*2        #batch size for refinement, as a percentage of ntr
 mstarttype = 2            # 0: No multistart
                           # 1: Start at the best out of a number of samples
                           # 2: Perform multiple optimizations
@@ -59,7 +61,8 @@ perturb = True
 bpen = False
 obj = "inv"
 nscale = 10.0 #1.0 for 2D
+
 # nmatch = dim
 
 # Print RC plots
-rc_print = False
+rc_print = True
