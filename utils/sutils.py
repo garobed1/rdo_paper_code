@@ -738,9 +738,9 @@ def print_rc_plots(bounds, name, obj, dir=0):
         # yfill = np.zeros(ndir)
         # ax.fill_between(x,  0., 1., where=wheret, color = 'g', alpha=0.2)
         # plt.axvline(x[valid[np.argmax(F[valid])]], color='k', linestyle='--', linewidth=1.2)
-        plt.savefig(f"{name}_rc_1d_{obj.ntr}.pdf", bbox_inches="tight")  
+        # plt.savefig(f"{name}_rc_1d_{obj.ntr}.pdf", bbox_inches="tight")  
+        plt.savefig(f"{name}_rc_1d.pdf", bbox_inches="tight")  
         plt.clf()
-        import pdb; pdb.set_trace()
 
     if(n == 2):
         import matplotlib.pyplot as plt

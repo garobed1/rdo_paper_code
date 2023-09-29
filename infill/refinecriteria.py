@@ -119,6 +119,16 @@ class ASCriteria():
             self.fix_ind = [x for x in np.arange(0, dim_t) if x not in self.sub_ind]
             self.fix_val = [0.]*len(self.fix_ind)
 
+        # flag for speeding up energy calculations if possible
+        self.energy_mode = False
+        self.D_cache = None
+
+        dim_u = len(self.sub_ind)
+        xlimits_u = np.zeros([dim_u,2])
+        xlimits_u[:,1] = 1.
+        samp = LHS(xlimits = xlimits_u)
+        self.e_x = samp(5000*dim_u)
+
         self.initialize(self.model)
 
     # set static variables if we're only refining over a subspace
@@ -198,7 +208,6 @@ class ASCriteria():
     def evaluate(self, x, bounds, dir=0):
 
         # _x = ensure_2d_array(x, 'x')
-        # import pdb; pdb.set_trace()
         ans = self._evaluate(x, bounds, dir=dir)
 
         return ans
@@ -280,15 +289,21 @@ class ASCriteria():
             xfix = qmc.scale(np.array([self.fix_val]), xlimits[fix_ind,0], xlimits[fix_ind,1], reverse=True)#[fix_ind]
 
         def eval_eff(x, bounds, direction):
-            x = np.atleast_1d(x)
-            x_eff = np.zeros([n])
-            x_eff[sub_ind] = x
-            x_eff[fix_ind] = xfix
+            x = np.atleast_2d(x)
+            x_eff = np.zeros([x.shape[0], n])
+            x_eff[:,sub_ind] = x
+            x_eff[:,fix_ind] = xfix
 
             y = self.evaluate(x_eff, bounds, direction)
             return y
 
-        energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
+        self.energy_mode = True
+
+        # energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
+        res = eval_eff(self.e_x, xlimits, dir)
+        energy = np.sum(res)/self.e_x.shape[0]
+
+        self.energy_mode = False
 
         return -energy
 

@@ -165,7 +165,7 @@ class RobustSampler():
 
         return tx
 
-    def _refine_sample(self, N, e_tol=-1.):
+    def _refine_sample(self, N, e_tol=None):
         tx = self.current_samples['x']
         noise = self.options["design_noise"]
 
@@ -271,7 +271,7 @@ class RobustSampler():
 
         return 1
 
-    def refine_uncertain_points(self, N, tol=-1., func=None, model=None):
+    def refine_uncertain_points(self, N, tol=None, func=None, model=None):
         """
         Second of two functions that will increment the sampling iteration
         Add more UQ points to the current design. Usually this is nested
@@ -543,7 +543,7 @@ class CollocationSampler(RobustSampler):
         # import pdb; pdb.set_trace()
         return tx
 
-    def _refine_sample(self, N, e_tol=-1.):
+    def _refine_sample(self, N, e_tol=None):
         N_old = self.N
 
         if isinstance(N, int):
@@ -665,7 +665,7 @@ class AdaptiveSampler(RobustSampler):
         return tx
 
 
-    def _refine_sample(self, N, e_tol=-1.):
+    def _refine_sample(self, N, e_tol=None):
         
         max_batch = self.options['max_batch']
         as_options = self.options['as_options']

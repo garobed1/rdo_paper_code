@@ -46,6 +46,11 @@ class HessianRefine(ASCriteria):
         )
 
         declare(
+            "rho",
+            None,
+            desc="Distance scaling parameter"
+        )
+        declare(
             "neval", 
             3, 
             types=int,
@@ -128,7 +133,10 @@ class HessianRefine(ASCriteria):
             self.y_sca = self.model.y_std
 
         # Determine rho for the error model
-        self.rho = self.options['rscale']*pow(self.ntr, 1./self.dim)
+        if self.options["rho"] is not None:
+            self.rho = self.options["rho"]
+        else:
+            self.rho = self.options['rscale']*pow(self.ntr, 1./self.dim)
 
         # Generate kd tree for nearest neighbors lookup
         self.tree = KDTree(trx)
@@ -158,7 +166,6 @@ class HessianRefine(ASCriteria):
 
             self.H = hess
             self.Mc = mcs#/np.max(mcs)
-        
 
     # Assumption is that the quadratic terms are the error
     def _evaluate(self, x, bounds, dir=0):
@@ -178,7 +185,18 @@ class HessianRefine(ASCriteria):
         # exhaustive search for closest sample point, for regularization
         # import pdb; pdb.set_trace()
         # D = cdist(np.array([x]), trx)
-        D = cdist(X_cont, trx)
+        if self.energy_mode:
+            if self.D_cache is None:
+                self.D_cache = cdist(X_cont, trx)
+            else:
+                diff = trx.shape[0] - self.D_cache.shape[1]
+                if diff > 0:
+                    self.D_cache = np.hstack([self.D_cache, cdist(X_cont, trx[-diff:,:])])
+
+            D = self.D_cache
+
+        else:
+            D = cdist(X_cont, trx)
         mindist = np.min(D, axis=1)
 
 

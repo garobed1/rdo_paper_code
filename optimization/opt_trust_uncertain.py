@@ -16,7 +16,6 @@ from openmdao.utils.mpi import MPI
 
 
 
-
 """
 Trust-region approach where m_k is a UQ evaluation (surrogate, SC, etc.) of a 
 certain level of fidelity.
@@ -550,7 +549,6 @@ class UncertainTrust(OptSubproblem):
                 fail = 0
                 succ = 2
                 break
-            import pdb; pdb.set_trace()
 
             # if we used the "truth" function to check refinement, we need to do this step now
             if not self.options["model_grad_err_est"]:
@@ -608,7 +606,6 @@ class UncertainTrust(OptSubproblem):
         print(f"    Total samples: {self.model_iters + self.truth_iters}")
             
 
-
     def model_refiner(self, lhs0, rhs0):
         """
         Refine the model based on options
@@ -660,15 +657,31 @@ class UncertainTrust(OptSubproblem):
                 if self.options["model_grad_err_est"]:
                     estat = 'adaptive'
                     refjump_max = max(rmin, self.options["truth_func_err_est_max"])
-                    refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
+
+                    # the right hand side is now the model gradient as it updates
+                    # this doubles up as a verification step and a guidance for refinement
+                    
+                    self.cur_tol = -1.0
+                    self.stop_update = False
+                    def xirhs(nmodel):
+                        if not self.stop_update: # if the gradient isn't changing much, there's no point to constantly recomputing it
+                            self.prob_model.model.stat.surrogate = nmodel
+                            gmod = self.prob_model.compute_totals(return_format='array')
+                            gerrm = np.linalg.norm(gmod)
+                            new_tol = self.xi*min(self.sdist, gerrm)
+                            if abs(new_tol - self.cur_tol) < 1e-6:
+                                self.stop_update = True
+                            self.cur_tol = new_tol
+                        return self.cur_tol
+
+                    # refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
+                    refjump = self.prob_model.model.stat.refine_model(refjump_max, xirhs)
                 else:
                     refjump = self.prob_model.model.stat.refine_model(refjump)
                     
                 self.reflevel += refjump
                 self.prob_model.run_model()
                 
-                import pdb; pdb.set_trace()
-
                 gmod = self.prob_model.compute_totals(return_format='array')
                 gerrm = np.linalg.norm(gmod)
                 if not self.options["model_grad_err_est"]:
@@ -678,7 +691,7 @@ class UncertainTrust(OptSubproblem):
                 rhs = min(gerrm, self.sdist)
 
                 if self.options["print"]:
-                    print(f"o       Inexact Iter: {rk} | Energy = {estat}| New Level = {self.reflevel}| LHS = {lhs}| RHS: {rhs}| xi*RHS - LHS = {rhs*self.xi - lhs}")
+                    print(f"o       Inexact Iter: {rk} | Energy = {estat}| New Level = {self.reflevel}| LHS = {lhs}| RHS: {rhs} | xi*RHS - LHS = {rhs*self.xi - lhs}")
             if self.options["print"]:
                 if lhs < self.xi*rhs:
                     print(f"o       Inexact Gradient Condition Satisfied in {rk} Iterations with {self.reflevel} Points")

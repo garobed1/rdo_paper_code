@@ -10,6 +10,9 @@ opt = 'L-BFGS-B' #'SLSQP'#
 local = True
 gopt = 'ga' #'brute'
 localswitch = True
+# POU Params
+rscale = 5.5
+rho = 5000. # NOTE: Only applies to criteria
 rsca = True  # hess function value scale
 vsca = False # hess cell volume scale
 
@@ -33,9 +36,8 @@ delta_x = 1e-4 #1e-7
 t0 = [1e-0]
 tb = [1e-6, 2e+1]
 
-# POU Params
-rscale = 5.5
-rho = 10
+
+# rho = 10
 
 # Adaptive Sampling Settings
 nt0  = 10       #initial design size
@@ -65,4 +67,4 @@ nscale = 10.0 #1.0 for 2D
 # nmatch = dim
 
 # Print RC plots
-rc_print = True
+rc_print = False

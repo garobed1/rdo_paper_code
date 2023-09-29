@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from utils.sutils import convert_to_smt_grads, print_rc_plots
 from functions.problem_picker import GetProblem
 from surrogate.pougrad import POUHessian
+from infill.getxnew import adaptivesampling
 from infill.hess_criteria import HessianRefine, HessianGradientRefine
 from smt.sampling_methods import LHS, FullFactorial
 from scipy.stats import qmc
@@ -56,24 +57,28 @@ gt = convert_to_smt_grads(func, xt)
 neval = dim + 1
 rsca = True
 model = POUHessian(bounds=xlimits, rscale = 5.5, neval = neval, min_contribution = 0.0)
+# model = POUHessian(bounds=xlimits, rho = 1000., neval = neval, min_contribution = 0.0)
 model.options.update({"print_prediction":False})
 model.set_training_values(xt, ft)
 convert_to_smt_grads(model, xt, gt)
 model.train()
 rcfunc = HessianRefine(model, gt, xlimits, rscale = 5.5, neval = neval, scale_by_volume=False, return_rescaled=rsca, sub_index=[0])
 rcfunc.pre_asopt(xlimits)
-rcgrad = HessianGradientRefine(model, gt, xlimits, rscale = 5.5, neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
+# rcgrad = HessianGradientRefine(model, gt, xlimits, rscale = 5.5, neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
+rcgrad = HessianGradientRefine(model, gt, xlimits, rho = 80., neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
 rcgrad.pre_asopt(xlimits)
 rcfunc.set_static(np.array([6.0]))
 rcgrad.set_static(np.array([6.0]))
 
 # rcgrad.evaluate(xt_s[9], xlimits)
 
+print_rc_plots(xlimits_u, "observe", rcgrad, 0)
+mf, rF, d1, d2, d3 = adaptivesampling(func, model, rcgrad, xlimits, 10)
+
 # gather the 3 gradient-contributing components
 print_rc_plots(xlimits_u, "observe", rcgrad, 0)
-
-
 import pdb; pdb.set_trace()
+
 
 if dim == 1:
     ndir = 200

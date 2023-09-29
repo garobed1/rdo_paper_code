@@ -14,6 +14,10 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
+
+
+
+
 """
 The adaptive sampling routine. Given a refinement criteria, find its corresponding 
 optimal observation point.
@@ -35,9 +39,7 @@ xnew : ndarray
 
 def getxnew(rcrit, bounds, batch, x_init=None, options=None):
     
-    # set default options if None is provided
-    if(options == None):
-        options = DefaultOptOptions
+    
     xnew = []
     bounds_used = bounds
     n = len(bounds)
@@ -63,14 +65,14 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
         x_eff[fix_ind] = xfix
 
         y = rcrit.evaluate(x_eff, bounds, dir)
-        return y
+        return y[0]
     def eval_grad_eff(x, bounds, dir):
         x_eff = np.zeros(n)
         x_eff[sub_ind] = x
         x_eff[fix_ind] = xfix
 
         dy = rcrit.eval_grad(x_eff, bounds, dir)
-        return dy[sub_ind]
+        return dy[0,sub_ind]
 
 
     # loop over batch
@@ -154,14 +156,21 @@ Inputs:
     batch: number of points to generate before computing function, only some rcrit support
     options: getxnew specific options
 """
-def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=-1., batch=1, options=None):
+def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, options=None):
 
+    # set default options if None is provided
+    if(options == None):
+        options = DefaultOptOptions
+    
     count = int(np.ceil(ntr/batch))
     hist = []
     errh = []
     errh2 = []
     model = copy.deepcopy(model0)
-    tol_condition = (e_tol > 0.) and rcrit.options["print_energy"]
+    tol_condition = (e_tol is not None) and rcrit.options["print_energy"]
+    tol_func = False
+    if callable(e_tol):
+        tol_func = True
     tol_met = False
 
     if(rcrit.options["print_iter"] and rank == 0):
@@ -169,8 +178,10 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=-1., batch=1, optio
         print(f"O       Begin Adaptive Sampling")
         print(f"O       Criteria = {rcrit.name}| Function = {func.options['name']} | Model = {model0.name}")
         print(f"O       Added Points = {ntr} | Batch Size = {batch} | ", end='')
-        if tol_condition:
+        if tol_condition and not tol_func:
             print(f"Max Steps = {count} | Target = {e_tol}")
+        elif tol_condition and  tol_func:
+            print(f"Max Steps = {count} | Target = {e_tol(model)}")
         else:
             print(f"Steps = {count}")
         print(f"___________________________________________________________________________")
@@ -231,23 +242,28 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=-1., batch=1, optio
             if i in intervals.tolist():
                 hist.append(copy.deepcopy(rcrit.model.training_points[None]))        
 
+            rcrit.initialize(model, g0)
+            
             en = 0.
             if(rcrit.options["print_iter"] and rank == 0):
                 print(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
                 if rcrit.options["print_energy"]:
                     en = rcrit.get_energy(bounds)
+                    if tol_func:
+                        e_tol_p = e_tol(model)
+                    else:
+                        e_tol_p = e_tol
                     if tol_condition:
-                        print(f", Energy = {en}, Target = {e_tol}")
+                        print(f", Energy = {en}, Target = {e_tol_p}")
                     else:
                         print(f", Energy = {en}")
                 else:
                     print('')
                 
             # replace criteria
-            rcrit.initialize(model, g0)
 
             # convergence check
-            if tol_condition and en < e_tol:
+            if tol_condition and en < e_tol_p:
                 tol_met = True
                 break
         # except:
