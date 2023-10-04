@@ -3,7 +3,7 @@ import copy
 from collections import defaultdict
 from utils.error import stat_comp, _gen_var_lists
 from scipy.special import legendre, hermite, jacobi, roots_legendre, roots_hermite, roots_jacobi
-from smt.sampling_methods import LHS
+from smt.sampling_methods import LHS, Random
 from infill.getxnew import adaptivesampling
 from infill.refinement_picker import GetCriteria
 from smt.utils.options_dictionary import OptionsDictionary
@@ -205,7 +205,7 @@ class RobustSampler():
 
 
 
-        return tx
+        return tx, None
 
     """
     End of methods to override
@@ -291,7 +291,7 @@ class RobustSampler():
         print(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
         self.func = func
         self.model = model
-        tx = self._refine_sample(N, e_tol=tol)
+        tx, log = self._refine_sample(N, e_tol=tol)
 
         # archive previous dataset
         self._internal_save_state(refine=True)
@@ -301,7 +301,7 @@ class RobustSampler():
 
         tdiff = tx.shape[0] - told
 
-        return tdiff
+        return tdiff, log
 
     def set_evaluated_func(self, f):
 
@@ -556,7 +556,7 @@ class CollocationSampler(RobustSampler):
 
         tx = self._new_sample(N)
 
-        return tx
+        return tx, None
 
     def _recurse_sc_formation(self, di, si, jumps, absc, weig, N):
         
@@ -614,6 +614,7 @@ class AdaptiveSampler(RobustSampler):
         u_xlimits = self.xlimits[self.x_u_ind]
         # self.sampling = LHS(xlimits=self.xlimits, criterion='maximin')
         self.sampling = LHS(xlimits=u_xlimits, criterion='maximin')
+        self.sampling_mc = Random(xlimits=u_xlimits)
 
         self.surrogate_initialized = False
 
@@ -645,6 +646,13 @@ class AdaptiveSampler(RobustSampler):
             desc="options dict for adaptive sampling iterator",
         )   
 
+        self.options.declare(
+            "max_adapt",
+            default=100,
+            desc="maximum number of points to sample adaptively, after that switch to monte carlo"
+
+        )
+
 
     # NOTE: jk we're overriding for now, TODO need option to initialize over udim or full dim FOR THE BASE CLASS
     def _new_sample(self, N):
@@ -652,7 +660,7 @@ class AdaptiveSampler(RobustSampler):
 
         # if model already exists, use _refine_sample instead
         if self.model is not None:
-            u_tx = self._refine_sample(N)
+            u_tx, dummy = self._refine_sample(N)
         else:
             u_tx = self.sampling(N)
         
@@ -670,9 +678,6 @@ class AdaptiveSampler(RobustSampler):
         max_batch = self.options['max_batch']
         as_options = self.options['as_options']
 
-        batch_use = max_batch
-        if N < max_batch:
-            batch_use = N
 
         if self.model == None:
             raise ValueError("Model not supplied!")
@@ -687,17 +692,65 @@ class AdaptiveSampler(RobustSampler):
             self.rcrit.set_static(self.x_d_cur[:,0])
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
+        N_before = modelset.training_points[None][0][0].shape[0]
 
         # func set in self.func, should not be none
         if self.func == None:
             raise ValueError("func not set in AdaptiveSampler")
 
+        # determine how many point to sample adaptively
+        N_use = N
+        if e_tol is not None:
+            N_use = min(N, self.options["max_adapt"])
+        N_remain = N - N_use
+        batch_use = max_batch
+        if N_use < max_batch:
+            batch_use = N_use
+
         # perform adaptive sampling
         # import pdb; pdb.set_trace()
-        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N, e_tol = e_tol, batch=batch_use, options=as_options)
-
-
+        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N_use, e_tol = e_tol, batch=batch_use, options=as_options)
         self.rcrit = rF
+        N_added = d1[-1][0][0].shape[0] - N_before
+
+        # check if we've converged
+        if e_tol is not None:
+            converged = d3[-1,0] < d3[-1,1]
+
+            # set tol to last one
+            e_tol_p = d3[-1,1]
+
+            # if not, add Monte Carlo points until tol is satisfied or N is reached
+            # give it at most 10 iterations
+            N_mc = int((N-N_added)/50)
+            c = 0
+            while not converged and N_added < N:
+                t0 = mf.training_points[None][0][0]
+                f0 = mf.training_points[None][0][1]
+                g0 = convert_to_smt_grads(mf)
+
+                # add points
+                tx_mc = self.sampling_mc(N_mc)
+                xnew = rF.post_asopt(tx_mc, bounds)
+                t0 = np.append(t0, xnew, axis=0)
+                f0 = np.append(f0, self.func(xnew), axis=0)
+                g0 = np.append(g0, convert_to_smt_grads(self.func, xnew), axis=0)
+                N_added += N_mc
+
+                # train
+                mf.set_training_values(t0, f0)
+                convert_to_smt_grads(mf, t0, g0)
+                mf.train()
+
+                # evaluate rcrit energy
+                d1.append(mf.training_points[None])
+                rF.initialize(mf, g0)
+                en = rF.get_energy(bounds)
+
+                d3 = np.append(d3, np.array([[en, e_tol_p, N_added]]), axis=0)
+                converged = d3[-1,0] < d3[-1,1]
+                print(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")
+                c += 1
 
 
         # set evaluations internally
@@ -711,7 +764,7 @@ class AdaptiveSampler(RobustSampler):
         self.dont_reset = True
 
 
-        return tx
+        return tx, d3
 
 
 

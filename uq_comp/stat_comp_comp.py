@@ -348,11 +348,11 @@ class StatCompComponent(om.ExplicitComponent):
             else:
                 self.sampler.N += N
             self.jump = N
-            N_act = self.sampler.refine_uncertain_points(N, tol=tol, func=self.func, model=self.surrogate) # second argument only works for AdaptiveSampler
+            N_act, log = self.sampler.refine_uncertain_points(N, tol=tol, func=self.func, model=self.surrogate) # second argument only works for AdaptiveSampler
         # reset training since the design is the same and we haven't moved
         self.first_train = False
 
-        return N_act
+        return N_act, log
 
 
 

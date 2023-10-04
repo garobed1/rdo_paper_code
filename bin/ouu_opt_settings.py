@@ -1,7 +1,7 @@
 # naming
 
 # name = 'betaex_trust_sc_demo'
-name = 'adaptive_ouu_demo_3'
+name = 'nonadaptive_ouu_demo_1'
 path = '.'
 
 

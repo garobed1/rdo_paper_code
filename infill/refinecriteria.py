@@ -195,14 +195,14 @@ class ASCriteria():
     def post_asopt(self, x, bounds, dir=0):
 
         ### Return Full Space
-        xe = np.zeros([bounds.shape[0]])
-        xe[self.sub_ind] = x
+        xe = np.zeros([x.shape[0], bounds.shape[0]])
+        xe[:, self.sub_ind] = x
         if len(self.sub_ind) != bounds.shape[0]:
-            xe[self.fix_ind] = self.fix_val
+            xe[:,self.fix_ind] = self.fix_val
 
         x = self._post_asopt(xe, bounds, dir)
 
-        self.trx = np.append(self.trx, np.array([x]), axis=0)
+        self.trx = np.append(self.trx, x, axis=0)
         return x
 
     def evaluate(self, x, bounds, dir=0):
@@ -297,14 +297,16 @@ class ASCriteria():
             y = self.evaluate(x_eff, bounds, direction)
             return y
 
-        self.energy_mode = True
+        # self.energy_mode = True
 
         # energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
         res = eval_eff(self.e_x, xlimits, dir)
-        energy = np.sum(res)/self.e_x.shape[0]
-
+        term = np.sum(res, axis=0)/self.e_x.shape[0]
+        if isinstance(term, np.ndarray):
+            energy = -np.linalg.norm(term[sub_ind])
+        else:
+            energy = term
         self.energy_mode = False
-
         return -energy
 
     

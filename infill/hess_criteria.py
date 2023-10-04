@@ -199,19 +199,32 @@ class HessianRefine(ASCriteria):
             D = cdist(X_cont, trx)
         mindist = np.min(D, axis=1)
 
-
+        fac = self.dV*Mc
         y_ = np.zeros(numeval)
-        for k in range(numeval):
+        if self.energy_mode:
+            y_ = np.zeros([numeval, self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            for k in range(numeval):
+            
+                work = X_cont[k,:] - trx
+                dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
+                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                numer = np.einsum('ij,i->j', local, expfac)
+                denom = np.sum(expfac)
+        
+                y_[k] = numer/denom
 
+        else: 
+            for k in range(numeval):
 
-            work = X_cont[k,:] - trx
-            dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
-            local = self.higher_terms(work, None, self.H)*self.dV*Mc # NEWNEWNEW
-            expfac = np.exp(-self.rho*(dist-mindist[k]))
-            numer = np.dot(local, expfac)
-            denom = np.sum(expfac)
-    
-            y_[k] = numer/denom
+                work = X_cont[k,:] - trx
+                dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                numer = np.dot(local, expfac)
+                denom = np.sum(expfac)
+        
+                y_[k] = numer/denom
 
         
         ans = -abs(y_)
@@ -309,8 +322,9 @@ class HessianRefine(ASCriteria):
     def higher_terms(self, dx, g, h):
         terms = np.zeros(dx.shape[0])
         
-        for j in range(dx.shape[0]):
-            terms[j] = 0.5*innerMatrixProduct(h[j], dx[j].T)
+        # for j in range(dx.shape[0]):
+        #     terms[j] = 0.5*innerMatrixProduct(h[j], dx[j].T)
+        terms = 0.5*np.einsum('ij,ijk,ik->i', dx, h, dx)
 
         if self.options["return_rescaled"]:
             terms *= self.y_sca
@@ -319,10 +333,11 @@ class HessianRefine(ASCriteria):
     def higher_terms_deriv(self, dx, g, h):
         # terms = (g*dx).sum(axis = 1)
         dterms = np.zeros_like(dx)
-        for j in range(dx.shape[0]):
-            for d in range(dx.shape[1]):
-                dterms[j,d] = np.dot(h[j,d,:], dx[j,:])#0.5*innerMatrixProduct(h, dx)
-        
+        # for j in range(dx.shape[0]):
+        for d in range(dx.shape[1]):
+            # dterms[j,d] = np.dot(h[j,d,:], dx[j,:])#0.5*innerMatrixProduct(h, dx)
+            dterms = np.einsum('ik, ik ->i', h[:,d,:], dx)
+
         if self.options["return_rescaled"]:
             dterms *= self.y_sca
         return dterms
@@ -405,6 +420,9 @@ class HessianGradientRefine(HessianRefine):
         
         if self.options["return_rescaled"]:
             terms = np.einsum('j,ij->ij',self.y_sca/self.x_sca, terms)
+
+        if self.energy_mode:
+            return terms[:,ind_use]
 
         avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         return avg_terms

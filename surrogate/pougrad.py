@@ -369,20 +369,38 @@ class POUHessian(POUSurrogate):
         # terms = np.dot(g, dx)
         # terms += 0.5*innerMatrixProduct(h, dx)
         terms = np.atleast_2d(g*dx).sum(axis = 1)
-        for j in range(dx.shape[0]):
-            terms[j] += 0.5*innerMatrixProduct(h[j], dx[j])
-            # import pdb; pdb.set_trace()
+        h2terms = 0.5*np.einsum('ij,ijk,ik->i', dx, h, dx)
+        terms += h2terms
+
         return terms
 
     def higher_terms_deriv(self, dx, g, h, kx):
         # terms = (g*dx).sum(axis = 1)
         dterms = np.zeros(dx.shape[0])
         dterms += g[:,kx]
-        for j in range(dx.shape[0]):
-            dterms[j] += np.dot(h[j][kx,:], dx[j])#0.5*innerMatrixProduct(h, dx)
+        h2terms = np.einsum('ik, ik ->i', h[:,kx,:], dx)
+        dterms += h2terms
         return dterms
 
+    # def higher_terms(self, dx, g, h):
+    #     # terms = np.dot(g, dx)
+    #     # terms += 0.5*innerMatrixProduct(h, dx)
+    #     terms = np.atleast_2d(g*dx).sum(axis = 1)
+    #     # hterms = np.zeros(dx.shape[0])
+    #     for j in range(dx.shape[0]):
+    #         terms[j] += 0.5*innerMatrixProduct(h[j], dx[j])
+    #     # import pdb; pdb.set_trace()
+    #     return terms
 
+    # def higher_terms_deriv(self, dx, g, h, kx):
+    #     # terms = (g*dx).sum(axis = 1)
+    #     # dterms = np.zeros(dx.shape[0])
+    #     dterms = g[:,kx]
+    #     # hterms zeros(dx.shape[0])
+    #     for j in range(dx.shape[0]):
+    #         dterms[j] += np.dot(h[j][kx,:], dx[j])#0.5*innerMatrixProduct(h, dx)
+    #     # import pdb; pdb.set_trace()
+    #     return dterms
 
         
     def _train_further(self):

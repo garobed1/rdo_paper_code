@@ -24,57 +24,61 @@ size = comm.Get_size()
 plt.rcParams['font.size'] = '16'
 
 """
-run a mean plus variance optimization over the 1D-1D test function, test out the sampling techniques
+Plot robust trust optimization results
 """
 
 
 # parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-o', '--optfile', action='store', default='ouu_opt_settings.py', help = 'python file containing settings for optimization parameters')
-parser.add_argument('-s', '--samplingfile', action='store', default='ouu_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
+parser.add_argument('-d', '--optdir', action='store', help = 'directory containing opt run outputs and settings')
+
+
 
 args = parser.parse_args()
-osetfile = args.optfile
-ssetfile = args.samplingfile
+optdir = args.optdir
 
 
 # import settings from given config files
 root = os.getcwd()
-# optimization imports
-optsplit = osetfile.split(sep='/')
-optuse = '.'.join(optsplit)
-if optuse.endswith('.py'):
-    optuse = optuse.split('.')[:-1]
-    optuse = '.'.join(optuse)
-oset = importlib.import_module(optuse)
-title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
-if(oset.path == None):
-    path = "."
+optsplit = optdir.split(sep='/')
+title = optsplit[-1]
+path = optsplit[:-1]
+if len(path) == 0:
+    path = ''
 else:
-    path = oset.path
+    path = path.join('/')
 
-# adaptive sampling imports, ignore path from here since it should be in oset
-samsplit = ssetfile.split(sep='/')
-suse = '.'.join(samsplit)
-if suse.endswith('.py'):
-    suse = suse.split('.')[:-1]
-    suse = '.'.join(suse)
+with open(f'/{root}/{path}/{title}/grad_lhs.pickle', 'rb') as f:
+    grad_lhs = pickle.load(f)
+with open(f'/{root}/{path}/{title}/grad_rhs.pickle', 'rb') as f:
+    grad_rhs = pickle.load(f)
+with open(f'/{root}/{path}/{title}/radii.pickle', 'rb') as f:
+    radii = pickle.load(f)
+with open(f'/{root}/{path}/{title}/realizations.pickle', 'rb') as f:
+    realizations = pickle.load(f)
+with open(f'/{root}/{path}/{title}/areds.pickle', 'rb') as f:
+    areds = pickle.load(f)
+with open(f'/{root}/{path}/{title}/preds.pickle', 'rb') as f:
+    preds = pickle.load(f)
+with open(f'/{root}/{path}/{title}/loc.pickle', 'rb') as f:
+    loc = pickle.load(f)
+with open(f'/{root}/{path}/{title}/models.pickle', 'rb') as f:
+    models = pickle.load(f)
+with open(f'/{root}/{path}/{title}/reflog.pickle', 'rb') as f:
+    reflog = pickle.load(f)
+with open(f'/{root}/{path}/{title}/prob_truth.pickle', 'rb') as f:
+    prob_truth = pickle.load(f)
+puse = path.split('/')
+puse = '.'.join(puse)
+optuse = '.'.join([title, 'opt_settings']) # missing path for now
+suse = '.'.join([title, 'sam_settings'])
+oset = importlib.import_module(optuse)
 sset = importlib.import_module(suse)
+# with open(f'/{root}/{path}/{title}/prob_model.pickle', 'rb') as f:
+#     grad_lhs = pickle.load(f)
 
-if rank == 0:
-    if not os.path.isdir(f"/{root}/{path}/{title}"):
-        os.mkdir(f"/{root}/{path}/{title}")
-    shutil.copy(f"../bin/{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
-    shutil.copy(f"../bin/{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
-
-
-
-
-
-
-
-
-
+if not os.path.isdir(f"/{root}/{path}/{title}/plots"):
+    os.mkdir(f"/{root}/{path}/{title}/plots")
 
 
 
@@ -223,7 +227,7 @@ probt.model.dvs.add_output("x_d", val=x_init)
 
 probt.model.add_subsystem("stat", 
                                   StatCompComponent(
-                                  sampler=sampler_t,
+                                  sampler=prob_truth,
                                   stat_type="mu_sigma", 
                                   pdfs=pdfs, 
                                   eta=eta_use, 
@@ -238,51 +242,7 @@ probt.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probt.model.add_objective("stat.musigma")
 probt.setup()
-probt.run_model()
-
-### ORIGINAL FUNCTION PLOT ###
-# ndir = 600
-# x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
-# y = np.zeros([ndir])
-# for j in range(ndir):
-#     probt.set_val("stat.x_d", x[j])
-#     probt.run_model()
-#     y[j] = probt.get_val("stat.musigma")
-# minind = np.argmin(y)
-# plt.plot(x, y, label='objective')
-# print(f"x* = {x[minind]}")
-# print(f"y* = {y[minind]}")
-# plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
-# plt.xlabel(r'$x_d$')
-# plt.ylabel(r'$S(x_d)$')
-# plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
-
-# import pdb; pdb.set_trace()
-
-""" 
-raw optimization section
-"""
-
-probt.run_driver()
-
-x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
-
-# plot conv
-cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
-plt.xlabel(r"Number of function calls")
-plt.ylabel(r"$\mu_f(x_d)$")
-#plt.legend(loc=1)
-plt.savefig(f"/{root}/{path}/{title}/convergence_truth.png", bbox_inches="tight")
-plt.clf()
-
-true_fm = copy.deepcopy(probt.model.stat.objs[-1])
-
-probt.set_val("stat.x_d", x_init)
-import pdb; pdb.set_trace()
-""" 
-raw optimization section
-"""
-
+# probt.run_model()
 
 ### MODEL OPENMDAO SETUP ###
 dvdict = OrderedDict()
@@ -305,107 +265,109 @@ probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
 # probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
-# dvdict = probm.model.get_design_vars()
-# probm.setup()
-
-### TRUST OPTIMIZATION OPENMDAO SETUP ###
-if trust_region_bound == 1:
-    # connect all dvs 
-    dv_settings = dvdict
-    probm.model.add_subsystem('trust', 
-                              TrustBound(dv_dict=dv_settings, 
-                                            initial_trust_radius=initial_trust_radius), 
-                                            promotes_inputs=list(dv_settings.keys()))
-    probm.model.add_constraint('trust.c_trust', lower=0.0)
-    # probm.model.trust.add_input("x_d", val=x_init)
-    # probm.model.trust.set_center(zk)
-    # probm.model.connect("x_d", "trust.x_d")
-# if 2, handle with changing dv bounds internally DEFAULT BEHAVIOR USE THIS
 probm.model.add_objective("stat.musigma")
-if trust_region_bound: #anything but 0
-    sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
-                                    initial_trust_radius=initial_trust_radius,
-                                    trust_option=trust_region_bound,
-                                    flat_refinement=jump, 
-                                    max_iter=max_outer,
-                                    use_truth_to_train=use_truth_to_train,
-                                    inexact_gradient_only=inexact_gradient_only,
-                                    ref_strategy=ref_strategy,
-                                    model_grad_err_est=approximate_model,
-                                    truth_func_err_est=approximate_truth,
-                                    truth_func_err_est_max=approximate_truth_max,
-                                    trust_increase_terminate=trust_increase_terminate)
-else:
-    sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
-                                    flat_refinement=jump, 
-                                    max_iter=max_outer,
-                                    use_truth_to_train=use_truth_to_train,
-                                    ref_strategy=ref_strategy,
-                                    approximate_truth=approximate_truth,
-                                    approximate_truth_max=approximate_truth_max)
-sub_optimizer.setup_optimization()
+probm.setup()
+
+### CONVERGENCE PLOTS ###
+niter = len(realizations)
+
+### TRUST RADIUS PLOT ###
+plt.plot(realizations, radii, 'o')
+plt.xlabel(r'Number of Realizations')
+plt.ylabel(r'Trust Radius')
+plt.savefig(f"/{root}/{path}/{title}/plots/trust_radius.png", bbox_inches="tight")
+plt.clf()
+
+### LHS RHS CONVERGENCE
+# get end optimization if used
+gerrm_post = np.zeros(prob_truth.iter_max)
+realizations_post = np.zeros(prob_truth.iter_max)
+for i in range(prob_truth.iter_max):
+    probt.set_val('stat.x_d', prob_truth.design_history[i])
+    probt.run_model()
+    gmod = probt.compute_totals(return_format='array')
+    gerrm_post[i] = np.linalg.norm(gmod)
+    realizations_post[i] = prob_truth.current_samples['x'].shape[0]*(i)
+
+for i in range(niter-2):
+    plt.plot(realizations[i] + reflog[i][:,2], reflog[i][:,1], 'r')
+    plt.plot(realizations[i] + reflog[i][:,2], reflog[i][:,0], 'b')
+    plt.axvline(realizations[i], color='k', linestyle='--', linewidth=1.2)
+if prob_truth.iter_max > 0:
+    plt.plot(realizations[i] + reflog[i][-1,2] + realizations_post, 
+                gerrm_post, 'g', label=r'$\|\hat{S}^T_k(x_d)\|$')
 
 
+
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel(r'Number of Realizations')
+plt.ylabel(r'Gradient Magnitude')
+plt.grid()
+plt.plot([],[], 'r', label=r'$\|\hat{S}^M_k(x_d)\|$')
+plt.plot([],[], 'b', label=r'$\beta_k$')
+plt.legend()
+plt.savefig(f"/{root}/{path}/{title}/plots/lhs_rhs.png", bbox_inches="tight")
+plt.clf()
+loc[0] = loc[0]['dvs.x_d']
+loc = loc[:-1]
+print(loc)
+# import pdb; pdb.set_trace()
+### MODEL EVOLUTION
+# Original Func
+ndir = 120
+x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
+yt = np.zeros([ndir])
+for j in range(ndir):
+    probt.set_val("stat.x_d", x[j])
+    probt.run_model()
+    yt[j] = probt.get_val("stat.musigma")
+minind = np.argmin(yt)
+ym = np.zeros([niter, ndir])
+for i in range(niter):
+    probm.model.stat.surrogate = models[i]
+    for j in range(ndir):
+        probm.set_val("stat.x_d", x[j])
+        probm.run_model()
+        ym[i,j] = probm.get_val("stat.musigma")
+    # plt.autoscale(True)
+    plt.plot(x, yt, label='objective')
+    xlim = plt.gca().get_xlim()
+    ylim = plt.gca().get_ylim()
+    plt.plot(x, ym[i,:], label=f'model {i}')
+    plt.axvline(loc[i], color='b', linestyle='-', linewidth=1.2)
+    plt.axvline(loc[i]+radii[i], color='b', linestyle='-', linewidth=1.0)
+    plt.axvline(loc[i]-radii[i], color='b', linestyle='-', linewidth=1.0)
+    if i < niter - 1:
+        plt.axvline(loc[i+1], color='g', linestyle='-', linewidth=1.0)
+    plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+    plt.xlim(xlim)
+    plt.ylim(ylim)
+    plt.xlabel(r'$x_d$')
+    plt.ylabel(r'$\hat{S}(x_d)$')
+    plt.legend()
+    plt.savefig(f"/{root}/{path}/{title}/plots/model_evo_{i}.png", bbox_inches="tight")
+    plt.clf()
 ### ORIGINAL FUNCTION PLOT ###
-# ndir = 150
+# ndir = 600
 # x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
 # y = np.zeros([ndir])
 # for j in range(ndir):
 #     probt.set_val("stat.x_d", x[j])
 #     probt.run_model()
 #     y[j] = probt.get_val("stat.musigma")
+# minind = np.argmin(y)
 # plt.plot(x, y, label='objective')
+# print(f"x* = {x[minind]}")
+# print(f"y* = {y[minind]}")
+# plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+# plt.xlabel(r'$x_d$')
+# plt.ylabel(r'$S(x_d)$')
+# plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
 
-# plt.savefig(f"./{name}/objrobust1_true.pdf", bbox_inches="tight")
-
-### INITIALIZE DESIGN ###
-sub_optimizer.prob_truth.set_val("stat.x_d", x_init)
-sub_optimizer.prob_model.set_val("stat.x_d", x_init)
-# probm.setup()
-sub_optimizer.prob_truth.set_val("x_d", x_init)
-sub_optimizer.prob_model.set_val("x_d", x_init)
-# om.n2(probm)
-sub_optimizer.prob_truth.run_model()
-sub_optimizer.prob_model.run_model()
+# import pdb; pdb.set_trace()
 
 
-### PERFORM OPTIMIZATION
-succ, fail = sub_optimizer.solve_full()
-### PERFORM OPTIMIZATION
-
-# if fail > 0:
-if 1:
-    sub_optimizer.prob_truth.set_val("stat.x_d", sub_optimizer.result_cur)
-    sub_optimizer.prob_truth.run_driver()
-
-
-### PICKLE RIGHT AWAY
-if rank == 0:
-    with open(f'/{root}/{path}/{title}/grad_lhs.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.grad_lhs, f)
-    with open(f'/{root}/{path}/{title}/grad_rhs.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.grad_rhs, f)
-    with open(f'/{root}/{path}/{title}/radii.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.radii, f)
-    with open(f'/{root}/{path}/{title}/realizations.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.realizations, f)
-    with open(f'/{root}/{path}/{title}/areds.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.areds, f)
-    with open(f'/{root}/{path}/{title}/preds.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.preds, f)
-    with open(f'/{root}/{path}/{title}/loc.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.loc, f)
-    with open(f'/{root}/{path}/{title}/models.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.models, f)
-    with open(f'/{root}/{path}/{title}/reflog.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.reflog, f)
-    with open(f'/{root}/{path}/{title}/prob_truth.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.prob_truth.model.stat.sampler, f)
-    with open(f'/{root}/{path}/{title}/prob_model.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.prob_model.model.stat.sampler, f)
-
-
-# ### CONVERGENCE PLOTS ###
 # x_opt_1 = copy.deepcopy(probm.model.get_val("x_d")[0])
 
 # func_calls_t = probt.model.stat.func_calls
@@ -520,3 +482,25 @@ if rank == 0:
 
 
 
+""" 
+raw optimization section
+"""
+
+# probt.run_driver()
+
+# x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
+
+# plot conv
+# cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
+# plt.xlabel(r"Number of function calls")
+# plt.ylabel(r"$\mu_f(x_d)$")
+# #plt.legend(loc=1)
+# plt.savefig(f"./{name}/convergence_truth.pdf", bbox_inches="tight")
+# plt.clf()
+
+# true_fm = copy.deepcopy(probt.model.stat.objs[-1])
+
+# probt.set_val("stat.x_d", x_init)
+""" 
+raw optimization section
+"""

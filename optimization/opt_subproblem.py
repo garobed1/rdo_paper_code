@@ -83,7 +83,7 @@ class OptSubproblem():
 
         declare(
             "stol", 
-            default=0.0, 
+            default=1e-5, 
             types=float,
             desc="step size tolerance"
         )

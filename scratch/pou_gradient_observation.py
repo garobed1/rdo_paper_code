@@ -10,7 +10,7 @@ from functions.problem_picker import GetProblem
 from surrogate.pougrad import POUHessian
 from infill.getxnew import adaptivesampling
 from infill.hess_criteria import HessianRefine, HessianGradientRefine
-from smt.sampling_methods import LHS, FullFactorial
+from smt.sampling_methods import LHS, FullFactorial, Random
 from scipy.stats import qmc
 
 """
@@ -31,25 +31,26 @@ xlimits_u = xlimits[0:1,:]
 # sampling_f = LHS(xlimits = xlimits, criterion='maximin')
 sampling_f = FullFactorial(xlimits = xlimits)#, criterion='maximin')
 sampling_u = LHS(xlimits = xlimits[0:1,:], criterion='maximin')
+sampling_r = Random(xlimits = xlimits)
 
-n = 150
-
-
-n1 = 6
-x1 = np.zeros([n1,dim])
-x1u = sampling_u(n1)
-x1[:,0] = x1u[:,0]
-x1[:,1] = 5.0
-
-n2 = 6
-x2 = np.zeros([n2,dim])
-x2u = sampling_u(n2)
-x2[:,0] = x2u[:,0]
-x2[:,1] = 6.0
+n = 100
 
 
-# xt = sampling_f(n)
-xt = np.concatenate([x1, x2])
+# n1 = 6
+# x1 = np.zeros([n1,dim])
+# x1u = sampling_u(n1)
+# x1[:,0] = x1u[:,0]
+# x1[:,1] = 5.0
+
+# n2 = 6
+# x2 = np.zeros([n2,dim])
+# x2u = sampling_u(n2)
+# x2[:,0] = x2u[:,0]
+# x2[:,1] = 6.0
+
+
+xt = sampling_f(n)
+# xt = np.concatenate([x1, x2])
 xt_s = qmc.scale(xt, xlimits[:,0], xlimits[:,1], reverse=True)
 ft = func(xt)
 gt = convert_to_smt_grads(func, xt)
@@ -62,16 +63,25 @@ model.options.update({"print_prediction":False})
 model.set_training_values(xt, ft)
 convert_to_smt_grads(model, xt, gt)
 model.train()
-rcfunc = HessianRefine(model, gt, xlimits, rscale = 5.5, neval = neval, scale_by_volume=False, return_rescaled=rsca, sub_index=[0])
-rcfunc.pre_asopt(xlimits)
-# rcgrad = HessianGradientRefine(model, gt, xlimits, rscale = 5.5, neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
+
+xe = sampling_r(3)
+
+t0 = time.time()
+# fe = model.predict_values(xe)
+fe = model.predict_derivatives(xe, kx=0)
+t1 = time.time()
+
+# rcfunc = HessianRefine(model, gt, xlimits, rscale = 5.5, neval = neval, scale_by_volume=False, return_rescaled=rsca, sub_index=[0])
+# rcfunc.pre_asopt(xlimits)
+# # rcgrad = HessianGradientRefine(model, gt, xlimits, rscale = 5.5, neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
 rcgrad = HessianGradientRefine(model, gt, xlimits, rho = 80., neval = dim+3, scale_by_volume=False, return_rescaled=rsca, grad_select=[1], sub_index=[0])
 rcgrad.pre_asopt(xlimits)
-rcfunc.set_static(np.array([6.0]))
+# rcfunc.set_static(np.array([6.0]))
 rcgrad.set_static(np.array([6.0]))
 
-# rcgrad.evaluate(xt_s[9], xlimits)
-
+ff=rcgrad.evaluate(xt_s[9], xlimits)
+fe=rcgrad.get_energy(xlimits)
+import pdb; pdb.set_trace()
 print_rc_plots(xlimits_u, "observe", rcgrad, 0)
 mf, rF, d1, d2, d3 = adaptivesampling(func, model, rcgrad, xlimits, 10)
 

@@ -139,7 +139,7 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
 
         # fixed variables are added back in post_asopt
         xnew.append(rcrit.post_asopt(rx, bounds, dir=i))
-
+        xnew = np.concatenate(xnew, axis=0)
     return xnew
 
 
@@ -165,7 +165,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
     count = int(np.ceil(ntr/batch))
     hist = []
     errh = []
-    errh2 = []
+    en_etol = []
     model = copy.deepcopy(model0)
     tol_condition = (e_tol is not None) and rcrit.options["print_energy"]
     tol_func = False
@@ -228,14 +228,14 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                 if(i in intervals.tolist() and i !=0):
                     err = full_error(model, func, xdata=xdata, fdata=fdata)
                     errh.append(err[0])
-                    errh2.append(err[1:])
+                    # errh2.append(err[1:])
                 # import pdb; pdb.set_trace()
                     #print("yes")
 
 
             else:
                 errh = None
-                errh2 = None
+                # errh2 = None
                 #hist = None
 
             # save training data at each interval regardless
@@ -245,18 +245,20 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
             rcrit.initialize(model, g0)
             
             en = 0.
+            e_tol_p = 0.
+            if rcrit.options["print_energy"]:
+                en = rcrit.get_energy(bounds)
+                if tol_func:
+                    e_tol_p = e_tol(model)
+                else:
+                    e_tol_p = e_tol
+                en_etol.append([en, e_tol_p, added])
             if(rcrit.options["print_iter"] and rank == 0):
                 print(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
-                if rcrit.options["print_energy"]:
-                    en = rcrit.get_energy(bounds)
-                    if tol_func:
-                        e_tol_p = e_tol(model)
-                    else:
-                        e_tol_p = e_tol
-                    if tol_condition:
-                        print(f", Energy = {en}, Target = {e_tol_p}")
-                    else:
-                        print(f", Energy = {en}")
+                if tol_condition:
+                    print(f", Energy = {en}, Target = {e_tol_p}")
+                elif rcrit.options["print_energy"]:
+                    print(f", Energy = {en}")
                 else:
                     print('')
                 
@@ -279,4 +281,4 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
 
 
 
-    return model, rcrit, hist, errh, errh2
+    return model, rcrit, hist, errh, np.array(en_etol)
