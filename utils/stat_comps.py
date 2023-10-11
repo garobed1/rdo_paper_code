@@ -43,10 +43,9 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
         N_act = copy.deepcopy(N)
     mean = area*sum(summand)/N_act
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
-    A = sum(dens)/N_act
+    A = (sum(dens)/N_act)*(area)
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
     # import pdb; pdb.set_trace()
-
     return (mean, stdev), vals
 
 
@@ -99,7 +98,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     gmean = (area/N_act)*np.sum(gsummand, axis=0 )
     
     #stdev = np.sqrt(((area*sum(summand*vals))/N - (mean)**2))#/N
-    A = sum(dens)/N_act
+    A = (sum(dens)/N_act)*(area)
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
     work = 0.5*(1./stdev)
     work2 = 2.*(2.-A)*mean*gmean

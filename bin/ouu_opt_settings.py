@@ -1,7 +1,8 @@
 # naming
 
 # name = 'betaex_trust_sc_demo'
-name = 'nonadaptive_ouu_demo_1'
+# name = 'nonadaptive_ouu_demo_1'
+name = 'betaex_ouu_demo_1'
 path = '.'
 
 
@@ -23,8 +24,7 @@ use_truth_to_train = True #NEW, ONLY IF USING SURR
 use_surrogate = True
 full_surrogate = True
 retain_uncertain_points = False
-
-
+retain_uncertain_points_T = True
 
 ##### design noise idea ##### (not particularly relevant)
 use_design_noise = False #NEW, ONLY IF USING SURR
@@ -36,6 +36,7 @@ design_noise_act = 0.0
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 1.0
+xi = 1.0
 # eta1
 # eta2
 # gamma1

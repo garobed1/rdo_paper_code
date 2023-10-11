@@ -440,8 +440,7 @@ class HessianGradientRefine(HessianRefine):
         davg_terms = np.zeros_like(dx)
         terms = np.einsum('ijk, ik->ij', h, dx)
         terms = np.einsum('j,ij->ij',scaler, terms)
-            
-        davg_terms = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use], scaler[ind_use])
+        davg_terms[:,ind_use] = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use][:,ind_use,:], scaler[ind_use])
         avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         davg_terms = np.einsum('ij,i->ij', davg_terms, 1./avg_terms)
         return davg_terms

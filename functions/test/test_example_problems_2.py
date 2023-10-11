@@ -3,7 +3,7 @@ import numpy as np
 import sys
 sys.path.insert(1,"../")
 
-from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine
+from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine, ShortColumn, ShortColumn1U
 
 class ProblemDiffTest2(unittest.TestCase):
 
@@ -52,6 +52,46 @@ class ProblemDiffTest2(unittest.TestCase):
         h = 1e-5
         dim = 3
         trueFunc = ALOSDim(ndim=dim)
+        xi = np.random.rand(dim)
+        spread = trueFunc.xlimits[:,1] - trueFunc.xlimits[:,0]
+        offset = -trueFunc.xlimits[:,0]
+        xg = np.random.rand(dim)*spread - offset
+
+        fgm = trueFunc(np.array([xg-h*xi]))
+        fgp = trueFunc(np.array([xg+h*xi]))
+        ga = np.zeros([1,dim])
+        for i in range(dim):
+            ga[0,i] = trueFunc(np.array([xg]), i)
+
+        finitediff = (1./(2*h))*(fgp-fgm)
+        analytic = np.dot(ga, xi)
+        err = abs(analytic - finitediff)
+        self.assertTrue(err < 1.e-8)
+
+    def test_ShortColumnGradient(self):
+        h = 1e-5
+        dim = 5
+        trueFunc = ShortColumn(ndim=dim)
+        xi = np.random.rand(dim)
+        spread = trueFunc.xlimits[:,1] - trueFunc.xlimits[:,0]
+        offset = -trueFunc.xlimits[:,0]
+        xg = np.random.rand(dim)*spread - offset
+
+        fgm = trueFunc(np.array([xg-h*xi]))
+        fgp = trueFunc(np.array([xg+h*xi]))
+        ga = np.zeros([1,dim])
+        for i in range(dim):
+            ga[0,i] = trueFunc(np.array([xg]), i)
+
+        finitediff = (1./(2*h))*(fgp-fgm)
+        analytic = np.dot(ga, xi)
+        err = abs(analytic - finitediff)
+        self.assertTrue(err < 1.e-8)
+
+    def test_ShortColumn1UGradient(self):
+        h = 1e-5
+        dim = 3
+        trueFunc = ShortColumn1U(ndim=dim)
         xi = np.random.rand(dim)
         spread = trueFunc.xlimits[:,1] - trueFunc.xlimits[:,0]
         offset = -trueFunc.xlimits[:,0]

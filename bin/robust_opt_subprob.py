@@ -64,8 +64,8 @@ sset = importlib.import_module(suse)
 if rank == 0:
     if not os.path.isdir(f"/{root}/{path}/{title}"):
         os.mkdir(f"/{root}/{path}/{title}")
-    shutil.copy(f"../bin/{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
-    shutil.copy(f"../bin/{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
+    shutil.copy(f"{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
+    shutil.copy(f"{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
 
 
 
@@ -97,6 +97,7 @@ xlimits = func.xlimits
 use_surrogate = oset.use_surrogate
 full_surrogate = oset.full_surrogate
 retain_uncertain_points = oset.retain_uncertain_points
+retain_uncertain_points_T = oset.retain_uncertain_points_T
 eta_use = oset.eta_use
 use_truth_to_train = oset.use_truth_to_train
 ref_strategy = oset.ref_strategy
@@ -116,7 +117,7 @@ approximate_model = oset.approximate_model
 approximate_truth = oset.approximate_truth
 approximate_truth_max = oset.approximate_truth_max
 trust_increase_terminate = oset.trust_increase_terminate
-
+xi = oset.xi
 
 ### SAMPLING STRATEGY ###
 sample_type = oset.sample_type
@@ -136,7 +137,7 @@ else:
                           name='truth', 
                           xlimits=xlimits, 
                           probability_functions=pdfs, 
-                          retain_uncertain_points=retain_uncertain_points)
+                          retain_uncertain_points=retain_uncertain_points_T)
 
 
 # get variable bounds from sampler_t
@@ -234,15 +235,15 @@ probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
 probt.driver.opt_settings = opt_settings
 probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 probt.model.connect("x_d", "stat.x_d")
-probt.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
+probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probt.model.add_objective("stat.musigma")
 probt.setup()
 probt.run_model()
 
 ### ORIGINAL FUNCTION PLOT ###
-# ndir = 600
-# x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
+# ndir = 200
+# x = np.linspace(xlimits_d[0,0], xlimits_d[0,1], ndir)
 # y = np.zeros([ndir])
 # for j in range(ndir):
 #     probt.set_val("stat.x_d", x[j])
@@ -255,30 +256,30 @@ probt.run_model()
 # plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
 # plt.xlabel(r'$x_d$')
 # plt.ylabel(r'$S(x_d)$')
-# plt.savefig(f"./{name}/objrobust_true.pdf", bbox_inches="tight")
-
+# plt.savefig(f"/{root}/{path}/{title}/objrobust_true.pdf", bbox_inches="tight")
+# plt.clf()
 # import pdb; pdb.set_trace()
 
 """ 
 raw optimization section
 """
 
-probt.run_driver()
+# probt.run_driver()
 
-x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
+# x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
 
-# plot conv
-cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
-plt.xlabel(r"Number of function calls")
-plt.ylabel(r"$\mu_f(x_d)$")
-#plt.legend(loc=1)
-plt.savefig(f"/{root}/{path}/{title}/convergence_truth.png", bbox_inches="tight")
-plt.clf()
+# # plot conv
+# cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
+# plt.xlabel(r"Number of function calls")
+# plt.ylabel(r"$\mu_f(x_d)$")
+# #plt.legend(loc=1)
+# plt.savefig(f"/{root}/{path}/{title}/convergence_truth.png", bbox_inches="tight")
+# plt.clf()
 
-true_fm = copy.deepcopy(probt.model.stat.objs[-1])
+# true_fm = copy.deepcopy(probt.model.stat.objs[-1])
 
-probt.set_val("stat.x_d", x_init)
-import pdb; pdb.set_trace()
+# probt.set_val("stat.x_d", x_init)
+# import pdb; pdb.set_trace()
 """ 
 raw optimization section
 """
@@ -304,7 +305,7 @@ probm.model.add_subsystem("stat", StatCompComponent(sampler=sampler_m,
 probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 # probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probm.model.connect("x_d", "stat.x_d")
-probm.model.add_design_var("x_d", lower=xlimits_d[0,0], upper=xlimits_d[0,1])
+probm.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # dvdict = probm.model.get_design_vars()
 # probm.setup()
 
@@ -324,6 +325,7 @@ if trust_region_bound == 1:
 probm.model.add_objective("stat.musigma")
 if trust_region_bound: #anything but 0
     sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
+                                    xi=xi,
                                     initial_trust_radius=initial_trust_radius,
                                     trust_option=trust_region_bound,
                                     flat_refinement=jump, 

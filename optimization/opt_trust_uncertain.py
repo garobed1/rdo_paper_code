@@ -72,8 +72,8 @@ class UncertainTrust(OptSubproblem):
 
         declare(
             "xi", 
-            # default=0.1, 
-            default=1.00, 
+            default=0.1, 
+            # default=1.00, 
             types=float,
             desc="coefficient for inexact gradient condition"
         )
@@ -459,13 +459,16 @@ class UncertainTrust(OptSubproblem):
             eta_k = actual_reduction/predicted_reduction
 
             # choose to accept or not
+            # NOTE: Forget this, no point
             accept = False
             if eta_k > eta_0:
                 tsteps += 1
                 zk = zk_cand
                 accept = True
             else:
-                zk = zk_cent
+                zk = zk_cand
+                accept = True
+                # zk = zk_cent
 
             #NOTE: this may be classic, as it is now, or retroactive, based on
             # updated/refined model, need to make this an option
@@ -721,7 +724,7 @@ class UncertainTrust(OptSubproblem):
 
                     # refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump_max, xirhs)
-                    gerrm = reflog[-1,1]
+                    gerrm = reflog[-1,1]/self.xi
                 else:
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump)
                     self.prob_model.run_model()

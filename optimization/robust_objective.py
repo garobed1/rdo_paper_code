@@ -144,6 +144,7 @@ class RobustSampler():
 
         u_xlimits = xlimits[self.x_u_ind]
         self.sampling = LHS(xlimits=u_xlimits, criterion='maximin')
+        self.weights = None
 
     def _declare_options(self):
         # add exclusive options
@@ -648,7 +649,7 @@ class AdaptiveSampler(RobustSampler):
 
         self.options.declare(
             "max_adapt",
-            default=100,
+            default=50,
             desc="maximum number of points to sample adaptively, after that switch to monte carlo"
 
         )
@@ -686,10 +687,13 @@ class AdaptiveSampler(RobustSampler):
 
         bounds = self.xlimits
         sset = self.options['criteria']
-        self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), bounds, self.x_u_ind)
+        # self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
+        #                          bounds, None, self.x_u_ind)
+        self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
+                                 bounds, self.options["probability_functions"], self.x_u_ind)
         if not self.options['full_refine']:
             # bounds = self.xlimits[self.x_u_ind]
-            self.rcrit.set_static(self.x_d_cur[:,0])
+            self.rcrit.set_static(self.x_d_cur[0,:])
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
         N_before = modelset.training_points[None][0][0].shape[0]
@@ -791,11 +795,13 @@ if __name__ == '__main__':
     
     from smt.problems import Rosenbrock
     from utils.sutils import convert_to_smt_grads
-    N = [5, 3]
-    pdfs = ['uniform', 'uniform']
+    # N = [5, 3]
+    N = 100
+    pdfs = [['uniform'], ['uniform']]
     func = Rosenbrock(ndim=2)
     xlimits = func.xlimits
-    samp = CollocationSampler(np.array([x_init]), N=N,
+    # samp = CollocationSampler(np.array([x_init]), N=N,
+    samp = RobustSampler(np.array([x_init]), N=N,
                                 xlimits=xlimits, 
                                 probability_functions=pdfs, 
                                 retain_uncertain_points=True)
@@ -809,7 +815,7 @@ if __name__ == '__main__':
     samp.set_evaluated_grad(gt)
 
     from utils.stat_comps import _mu_sigma_comp, _mu_sigma_grad
-    stats, vals = _mu_sigma_comp(func, xt.shape[0], xt, xlimits, samp.scales, pdfs, tf = ft, weights=samp.weights)
+    stats, vals = _mu_sigma_comp(func, xt.shape[0], xt, xlimits, samp.scales, samp.pdfs, tf = ft, weights=samp.weights)
     # gstats, grads = _mu_sigma_grad(func, xt.shape[0], xt, xlimits, samp.scales, pdfs, tf = ft, tg=gt, weights=samp.weights)
     import pdb; pdb.set_trace()
     #TODO: Make a test for this

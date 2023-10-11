@@ -1,6 +1,6 @@
 import numpy as np
 from smt.sampling_methods import LHS
-from scipy.stats import uniform, norm, beta, truncnorm
+from scipy.stats import uniform, norm, beta, truncnorm, lognorm
 
 from smt.utils.options_dictionary import OptionsDictionary
 from utils.stat_comps import _mu_sigma_comp, _mu_sigma_grad
@@ -9,6 +9,8 @@ from utils.stat_comps import _mu_sigma_comp, _mu_sigma_grad
 _pdf_handle = {
     "uniform":uniform,
     "norm":norm,
+    "truncnorm":truncnorm,
+    "lognorm":lognorm,
     "beta":beta
 }
 
@@ -117,7 +119,6 @@ def stat_comp(model, prob, stat_type="mu_sigma", N=5000, xdata=None, fdata=None,
     Outputs:
         tuple of outputs or output gradients
     """
-    
     xlimits = prob.xlimits
 
     dim = len(xlimits)#tx.shape[1]
@@ -228,7 +229,6 @@ def stat_comp(model, prob, stat_type="mu_sigma", N=5000, xdata=None, fdata=None,
 
         # return errors first if requested
         return err_tup, out_tup, t_tup # to scale error if you want 
-    
     return out_tup
 
 
@@ -341,27 +341,40 @@ def _gen_var_lists(pdfs, xlimits):
     uncert_list = []   # same length
     static_list = []
     scales = np.zeros(dim)
+    locs = np.zeros(dim)
     for j in range(dim):
         scales[j] = (xlimits[j][1] - xlimits[j][0]) # not necessarily the case
-
+        locs[j] = xlimits[j][0]
         # if dist needs more args, (e.g. beta shape params) pass the dist as a
         # list with the name as the first argument and remaining args as the next ones
         if isinstance(pdfs[j], list):   
-            args = pdfs[j][1:]
-            args.append(xlimits[j][0])#loc=
+            arglist = pdfs[j][0:]
+            args = []
+            if arglist[0] == 'norm':
+                scales[j] = arglist[2]
+                locs[j] = arglist[1]
+            elif arglist[0] == 'lognorm':
+                scales[j] = np.exp(arglist[1])
+                locs[j] = 0
+                args.append(arglist[2])
+            elif arglist[0] == 'beta':
+                args.append(arglist[1])
+                args.append(arglist[2])
+
+            args.append(locs[j])#loc=
             args.append(scales[j])#scale=
             pdf_list.append(_pdf_handle[pdfs[j][0]](*args))
             pdf_name_list.append(pdfs[j][0])
             uncert_list.append(j)
-
-        # pdf with no arguments e.g. uniform
-        elif isinstance(pdfs[j], str):   
-            args = []
-            args.append(xlimits[j][0])#loc=
-            args.append(scales[j])#scale=
-            pdf_list.append(_pdf_handle[pdfs[j]](*args))
-            pdf_name_list.append(pdfs[j])
-            uncert_list.append(j)
+            scales[j] = (xlimits[j][1] - xlimits[j][0])
+        # # pdf with no arguments e.g. uniform
+        # elif isinstance(pdfs[j], str):   
+        #     args = []
+        #     args.append(xlimits[j][0])#loc=
+        #     args.append(scales[j])#scale=
+        #     pdf_list.append(_pdf_handle[pdfs[j]](*args))
+        #     pdf_name_list.append(pdfs[j])
+        #     uncert_list.append(j)
         
         # no pdf, fixed at the float given
         elif isinstance(pdfs[j], float): # consider these variables to be fixed (e.g. design vars)
@@ -371,7 +384,7 @@ def _gen_var_lists(pdfs, xlimits):
         # treat as if uniform
         elif pdfs[j] == None: 
             args = []
-            args.append(xlimits[j][0])#loc=
+            args.append(locs[j])#loc=
             args.append(scales[j])#scale=
             pdf_list.append(_pdf_handle['uniform'])
             pdf_name_list.append('uniform')
@@ -379,5 +392,4 @@ def _gen_var_lists(pdfs, xlimits):
         else: # ndarray, should only have one element
             pdf_list.append(pdfs[j][0])
             static_list.append(j)
-
     return pdf_list, uncert_list, static_list, scales, pdf_name_list

@@ -138,6 +138,7 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
             rx = None
 
         # fixed variables are added back in post_asopt
+        rx = np.atleast_2d(rx)
         xnew.append(rcrit.post_asopt(rx, bounds, dir=i))
         xnew = np.concatenate(xnew, axis=0)
     return xnew
@@ -193,6 +194,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
 
     intervals = np.arange(0, count+1)
     added = 0
+    e_tol_h = 0.
     for i in range(count):
         # try:
         if 1:
@@ -249,7 +251,11 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
             if rcrit.options["print_energy"]:
                 en = rcrit.get_energy(bounds)
                 if tol_func:
-                    e_tol_p = e_tol(model)
+                    if i % 5 == 0:
+                        e_tol_p = e_tol(model)
+                        e_tol_h = copy.deepcopy(e_tol_p)
+                    else:
+                        e_tol_p = copy.deepcopy(e_tol_h)
                 else:
                     e_tol_p = e_tol
                 en_etol.append([en, e_tol_p, added])
@@ -261,7 +267,6 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                     print(f", Energy = {en}")
                 else:
                     print('')
-                
             # replace criteria
 
             # convergence check

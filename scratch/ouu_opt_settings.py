@@ -20,6 +20,7 @@ use_truth_to_train = False #NEW, ONLY IF USING SURR
 use_surrogate = True
 full_surrogate = True
 retain_uncertain_points = True
+retain_uncertain_points_T = True
 
 # ##### design noise idea ##### (not particularly relevant)
 # use_design_noise = False #NEW, ONLY IF USING SURR

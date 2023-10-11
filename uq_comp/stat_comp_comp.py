@@ -44,6 +44,7 @@ class StatCompComponent(om.ExplicitComponent):
 
         self.xps = []
         self.objs = []
+        self.grads = []
         self.func_calls = []
 
         self.surr_x = []
@@ -278,10 +279,12 @@ class StatCompComponent(om.ExplicitComponent):
 
         # set surrogate computation
         if self.surrogate:
-            eval_sampler = None
+            eval_sampler = self.surr_eval
+            eval_sampler[:,self.sampler.x_d_ind] = x
             eval_N = 5000*self.sampler.x_u_dim
 
-        self.pdfs[1] = x
+        for j in range(self.sampler.x_d_dim):
+            self.pdfs[self.sampler.x_d_ind[j]] = x[j]
         moved = self.sampler.set_design(np.array([x]))
         if self.check_partials_flag: # if running check_partials, don't add any points
             moved = 0
@@ -330,6 +333,8 @@ class StatCompComponent(om.ExplicitComponent):
                                 xdata=eval_sampler)
         gm = gres[0]
         gs = gres[1]
+
+        self.grads.append(eta*gm + (1-eta)*gs)
         partials['musigma','x_d'] = eta*gm + (1-eta)*gs
 
     def get_fidelity(self):

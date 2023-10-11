@@ -13,6 +13,7 @@ from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.optimize import Bounds
 from scipy.integrate import nquad
 from scipy.stats import qmc
+from utils.error import _gen_var_lists
 from utils.sutils import print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
 
 """Base Class for Adaptive Sampling Criteria Functions"""
@@ -101,6 +102,11 @@ class ASCriteria():
             None, 
             desc="indices of dimensions to refine over, mostly useful for pre and post as"
             )
+        self.options.declare(
+            "pdf_weight",
+            None,
+            desc="pdf list to weight criteria by"
+        )
 
 
         self.options.update(kwargs)
@@ -118,6 +124,17 @@ class ASCriteria():
             self.sub_ind = self.options['sub_index']
             self.fix_ind = [x for x in np.arange(0, dim_t) if x not in self.sub_ind]
             self.fix_val = [0.]*len(self.fix_ind)
+
+        # pdfs
+        self.pdfs = [1.]*dim_t
+        u_b = np.zeros([dim_t, 2])
+        u_b[:,1] = 1.0
+        if self.options['pdf_weight'] is not None:
+            pdf_list, uncert_list, static_list, scales, pdf_name_list = _gen_var_lists(self.options['pdf_weight'], u_b)
+            for i in range(len(pdf_list)):
+                if not isinstance(pdf_list[i], float):
+                    self.pdfs[i] = pdf_list[i]
+                    
 
         # flag for speeding up energy calculations if possible
         self.energy_mode = False
@@ -210,15 +227,57 @@ class ASCriteria():
         # _x = ensure_2d_array(x, 'x')
         ans = self._evaluate(x, bounds, dir=dir)
 
-        return ans
+        # apply pdf weightings if present
+        weight = np.ones_like(ans)
+        xw = np.atleast_2d(x)
+        area = 1.0
+        for j in range(xw.shape[1]):
+            if isinstance(self.pdfs[j], float) or j not in self.sub_ind:
+                weight *= 1.0
+            else:
+                weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                area *= bounds[j,1] - bounds[j,0]
+        ans_w = ans*weight*area
+        return ans_w
     
     def eval_grad(self, x, bounds, dir=0):
 
         # _x = ensure_2d_array(x, 'x')
 
         ans = self._eval_grad(x, bounds, dir=dir)
-
-        return ans
+        ans_w = ans
+        if self.options["pdf_weight"]:
+            h = 1e-8
+            ans_f = self._evaluate(x, bounds, dir=dir)
+            weight = np.ones_like(ans_f)
+            xw = np.atleast_2d(x)
+            dweight = np.zeros_like(xw)
+            area = 1.0
+            for j in range(xw.shape[1]):
+                if isinstance(self.pdfs[j], float) or j not in self.sub_ind:
+                    weight *= 1.0
+                    dweight *= 1.0
+                else:
+                    weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                    area *= bounds[j,1] - bounds[j,0]
+                    for k in range(xw.shape[1]):
+                        if isinstance(self.pdfs[k], float):
+                            dweight[:,j] *= self.pdfs[k]
+                        else:
+                            if j != k:
+                                dweight[:,j] *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                            else:
+                                fac = 1.0
+                                step = xw[:,j:j+1] + h
+                                if step > 1.0: # just in case
+                                    fac = -1.0
+                                    step = xw[:,j:j+1] - h
+                                dweight[:,j] *= fac*(self.pdfs[j].pdf(qmc.scale(step, bounds[j,0], bounds[j,1]))[:,0] -
+                                            self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0])/h
+        
+            ans_w = np.einsum('i,ij->ij', ans_f, np.atleast_2d(dweight)) + np.einsum('i,ij->ij', weight, np.atleast_2d(ans))
+            ans_w *= area
+        return ans_w
 
     def eval_constraint(self, x, bounds, dir=0):
 
@@ -306,6 +365,7 @@ class ASCriteria():
             energy = -np.linalg.norm(term[sub_ind])
         else:
             energy = term
+
         self.energy_mode = False
         return -energy
 
