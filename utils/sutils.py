@@ -9,6 +9,12 @@ from smt.sampling_methods import LHS
 from smt.surrogate_models.surrogate_model import SurrogateModel as SMT_SM
 from smt.problems.problem import Problem as SMT_PB
 
+para = False
+try:
+    from numba import jit, njit, prange
+    para = True
+except:
+    pass
 
 def standardization2(X, y, bounds):
 
@@ -671,6 +677,44 @@ def convert_to_smt_grads(smt_func, x_array=None, g_array=None, deriv_predict=Fal
 #     gn[i,:] = i
 
 # quadraticSolve(x, xn, f, fn, g, gn)
+
+"""
+Euclidean distance function (maybe incorporate others?)
+
+Parameters:
+    A: ndarray: location matrix 1
+    B: ndarray: location matrix 2
+    parallel: bool: parallelize
+    
+Returns:
+    D: ndarray: Distance matrix
+"""
+def gen_dist_func_nb(kernel_inner=None, kernel_outer=None, parallel=True):
+
+    if kernel_inner == None:
+        kernel_inner = lambda x,y:(x-y)**2
+        kernel_outer = lambda acc:np.sqrt(acc)
+
+    kernel_inner_nb = njit(kernel_inner, fastmath=True,inline='always')
+    kernel_outer_nb = njit(kernel_outer, fastmath=True,inline='always')
+
+    def dot_T(A_c,B_c):
+        assert B_c.shape[1]==A_c.shape[1]
+
+        out=np.empty((A_c.shape[0],B_c.shape[0]),dtype=A_c.dtype)
+        for i in prange(A_c.shape[0]):
+            for j in range(B_c.shape[0]):
+                acc=0
+                for k in range(A_c.shape[1]):
+                    acc+=kernel_inner_nb(A_c[i,k],B_c[j,k])
+                out[i,j]=kernel_outer_nb(acc)
+        return out
+
+    D = njit(dot_T, fastmath=True, parallel=parallel)
+
+    return D
+
+
 
 """
 Print generic refinement criteria plots

@@ -234,23 +234,23 @@ if __name__ == '__main__':
     # OpenMDAO setup
     ################################################################################
 
-    use_shock = False
-    use_inflow = False
+    use_shock = True
+    use_inflow = True
     full_far = False
     subsonic = False
 
     problem_settings = default_impinge_setup
     # problem_settings.aeroOptions['equationType'] = 'laminar NS'
-    problem_settings.aeroOptions['equationType'] = 'Euler'
-    # problem_settings.aeroOptions['NKSwitchTol'] = 1e-6 #1e-6
-    problem_settings.aeroOptions['NKSwitchTol'] = 1e-3 #1e-6
+    # problem_settings.aeroOptions['equationType'] = 'Euler'
+    problem_settings.aeroOptions['NKSwitchTol'] = 1e-6 #1e-6
+    # problem_settings.aeroOptions['NKSwitchTol'] = 1e-3 #1e-6
     problem_settings.aeroOptions['nCycles'] = 5000000
 
     problem_settings.aeroOptions['L2Convergence'] = 1e-15
     problem_settings.aeroOptions['printIterations'] = False
     problem_settings.aeroOptions['printTiming'] = True
 
-    problem_settings.mach = 1.7
+    problem_settings.mach = 2.7
     # problem_settings.beta = 0.8
     # problem_settings.mach = 0.8
 
@@ -271,8 +271,8 @@ if __name__ == '__main__':
 
     # prob.model.add_design_var("M1")
     # prob.model.add_design_var("beta")
-    prob.model.add_design_var("P1")
-    prob.model.add_design_var("T1")
+    # prob.model.add_design_var("P1")
+    # prob.model.add_design_var("T1")
     # prob.model.add_design_var("r1")
 
     # prob.model.add_design_var("P0")
@@ -282,7 +282,7 @@ if __name__ == '__main__':
     # prob.model.add_design_var("r0")
     # prob.model.add_design_var("P0")
 
-    # prob.model.add_design_var("shock_angle")
+    prob.model.add_design_var("shock_angle")
 
     # prob.model.add_objective("test.aero_post.cd_def")
     # prob.model.add_objective("test.aero_post.cdv_def")

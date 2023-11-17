@@ -389,10 +389,15 @@ if __name__ == '__main__':
             TF[i,j] = weval/nu
 
     # # Plot the target function
-    plt.contourf(X1, X2, TF, levels=15, label=f'True')
+    plt.contourf(X1, X2, TF.T, levels=15, label=f'True')
     plt.xlabel(r"$x_{d,1}$")
     plt.ylabel(r"$x_{d,2}$")
-    plt.colorbar()
+    plt.colorbar(label=r"$S(x_{d,1}, x_{d,2})$")
+    # import pdb; pdb.set_trace()
+    # minindx = np.argmin(TF.T, keepdims=True)
+    minind = np.where(TF.T == np.min(TF.T))
+    plt.scatter(x1[minind[1]][0], x2[minind[0]][0], color='r')
+    plt.scatter(9., 15., color='b')
     #plt.legend(loc=1)
     plt.savefig(f"./2dshortcol1u.png", bbox_inches="tight")
     plt.clf()

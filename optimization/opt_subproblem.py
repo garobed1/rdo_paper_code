@@ -78,7 +78,14 @@ class OptSubproblem():
             "gtol", 
             default=1e-6, 
             types=float,
-            desc="Maximum allowable gradient L2 norm at sub-optimization solutions"
+            desc="Maximum allowable optimality at sub-optimization solutions"
+        )
+
+        declare(
+            "ctol", 
+            default=1e-5, 
+            types=float,
+            desc="Maximum allowable feasability/constraint violation at sub-optimization solutions"
         )
 
         declare(

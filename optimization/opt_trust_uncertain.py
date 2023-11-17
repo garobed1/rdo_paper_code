@@ -5,7 +5,7 @@ import collections
 from optimization.optimizers import optimize
 from optimization.robust_objective import RobustSampler
 from optimization.opt_subproblem import OptSubproblem
-from utils.om_utils import get_om_design_size, om_dict_to_flat_array
+from utils.om_utils import get_om_design_size, om_dict_to_flat_array, grad_opt_feas
 from optimization.trust_bound_comp import TrustBound
 from collections import OrderedDict
 
@@ -14,7 +14,7 @@ from smt.utils.options_dictionary import OptionsDictionary
 import openmdao.api as om
 from openmdao.utils.mpi import MPI
 
-
+con_test = 1
 
 """
 Trust-region approach where m_k is a UQ evaluation (surrogate, SC, etc.) of a 
@@ -44,7 +44,7 @@ class UncertainTrust(OptSubproblem):
         declare = self.options.declare
         declare(
             "initial_trust_radius", 
-            default=1.0, 
+            default=0.1, 
             types=float,
             desc="trust radius at the first iteration"
         )
@@ -126,6 +126,12 @@ class UncertainTrust(OptSubproblem):
             desc="Use an estimate of the validation function error to drive validation refinement"
         )
         declare(
+            "no_stall", 
+            default=True, 
+            types=bool,
+            desc="Do not stall out the rhs recomputation if it matches the previous iteration closely"
+        )
+        declare(
             "truth_func_err_est_max", 
             default=5000, 
             types=int,
@@ -179,6 +185,9 @@ class UncertainTrust(OptSubproblem):
         else:
             Exception("No trust region type specified!")
 
+
+        
+
     def solve_full(self):
 
 
@@ -214,6 +223,7 @@ class UncertainTrust(OptSubproblem):
 
         self.gtol = self.options['gtol']
         stol = self.options['stol']
+        self.ctol = self.options['ctol'] # feasability
         miter = self.options['max_iter']
         max_trust_radius = self.options['max_trust_radius']
         initial_trust_radius = self.options['initial_trust_radius']
@@ -223,6 +233,7 @@ class UncertainTrust(OptSubproblem):
         gamma_1 = self.options['gamma_1']
         gamma_2 = self.options['gamma_2']
         self.xi = self.options["xi"]
+        self.no_stall = self.options["no_stall"]
         
 
         if not (0 <= eta_0 < 1.0):
@@ -238,6 +249,15 @@ class UncertainTrust(OptSubproblem):
         if initial_trust_radius >= max_trust_radius:
             raise ValueError('the initial trust radius must be less than the '
                          'max trust radius')
+
+
+        """
+        Check for problem constraints
+        
+        """
+        self.have_cons = False
+        if self.prob_model.driver._cons:
+            self.have_cons = True
 
    
         # initial guess in dict format, whatever the current state of the OM system is
@@ -272,9 +292,11 @@ class UncertainTrust(OptSubproblem):
         # get DV bounds
         dvbl = {}
         dvbu = {}
+        dvsc = {}
         for name in dvsettings:
             dvbl[name] = copy.deepcopy(dvsettings[name]['lower'])
             dvbu[name] = copy.deepcopy(dvsettings[name]['upper'])
+            dvsc[name] = dvbu[name] - dvbl[name]
 
         # we assume that fidelity belongs to the top level system
         # calling it stat for now
@@ -288,9 +310,14 @@ class UncertainTrust(OptSubproblem):
         if not self.options["model_grad_err_est"]:
             self._eval_truth(zk)
             ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
-            #TODO: this needs to be the lagrangian gradient with constraints
-            self.gtru = self.prob_truth.compute_totals(return_format='array')
-            self.gerr = np.linalg.norm(self.gtru)
+            
+            # Lagrangian, Optimality, Feasability
+            if con_test:
+                self.gtru, self.gerr, self.gfea, dummy = grad_opt_feas(self.prob_truth, self.have_cons, self.ctol)
+            else:
+                self.gtru = self.prob_truth.compute_totals(return_format='array')
+                self.gerr = np.linalg.norm(self.gtru)
+
             gerr0 += self.gerr
             self.grange = gerr0 - self.gtol
             if self.options["print"]:
@@ -343,24 +370,24 @@ class UncertainTrust(OptSubproblem):
 
             # 
             zk_cent = copy.deepcopy(zk)
-            # import pdb; pdb.set_trace()
+            # 
             #TODO: SCALED TRUST REGION
             if self.trust_opt == 1:
                 self.prob_model.model.trust.set_center(zk_cent)
             else: #BOX, self.trust_opt == 2
                 for name in dvsettings:
-                    llmt = np.maximum(zk_cent[name] - trust_radius, dvbl[name])
-                    ulmt = np.minimum(zk_cent[name] + trust_radius, dvbu[name])
+                    llmt = np.maximum(zk_cent[name] - trust_radius*dvsc[name], dvbl[name])
+                    ulmt = np.minimum(zk_cent[name] + trust_radius*dvsc[name], dvbu[name])
                     #TODO: Annoying absolute name path stuff
                     self.prob_model.model.set_design_var_options(name.split('.')[-1], lower=llmt, upper=ulmt)
 
 
             ### THE SUBPROBLEM SOLVE    
-            # import pdb; pdb.set_trace()
+            # 
             # self.prob_model.model.stat.check_partials_flag = True
             # self.prob_model.check_partials()
             # self.prob_model.model.stat.check_partials_flag = False
-            # import pdb; pdb.set_trace()
+            # 
             fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             self._solve_subproblem(zk)  
             fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
@@ -368,7 +395,7 @@ class UncertainTrust(OptSubproblem):
             # self.prob_model.model.stat.check_partials_flag = True
             # self.prob_model.check_partials()
             # self.prob_model.model.stat.check_partials_flag = False
-            # import pdb; pdb.set_trace()
+            # 
 
             # compute predicted reduction
             predicted_reduction = fmod_cent - fmod_cand #kouri method
@@ -376,22 +403,32 @@ class UncertainTrust(OptSubproblem):
             self.pred = predicted_reduction
             
             # retrieve gradients information
-            # import pdb; pdb.set_trace()
+            # 
             # this needs to be the lagrangian gradient with constraints
-            gmod = self.prob_model.compute_totals(return_format='array')
-            gerrm = np.linalg.norm(gmod)
+            
+            if con_test:
+                gmod, gerrm, gfeam, duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol)
+            else:
+                gmod = self.prob_model.compute_totals(return_format='array')
+                gerrm = np.linalg.norm(gmod)
+            
         
             # need distance of prediction, and if its on edge of radius
             # the dv arrays originate from OrderedDict objects, so this should be fine
             zce_arr = om_dict_to_flat_array(zk_cent, dvsettings, dvsize)
             zca_arr = om_dict_to_flat_array(zk_cand, dvsettings, dvsize)
+            sc_arr = om_dict_to_flat_array(dvsc, dvsettings, dvsize)
             s = zca_arr - zce_arr
+            s_sc = np.zeros_like(s)
+            for i in range(s_sc.size):
+                s_sc[i] = s[i]/sc_arr[i]
             self.sdist = np.linalg.norm(s)
+            self.sdist_sc = np.linalg.norm(s_sc)
             if self.options["print"]:
-                print(f"o       Step Size = {self.sdist}, Step Tol = {stol}")
+                print(f"o       Step Size = {self.sdist}, Relative = {self.sdist_sc}, Step Tol = {stol}")
             
             # If the predicted step size is small enough
-            if self.sdist < stol:
+            if self.sdist_sc < stol and gfeam < self.ctol:
                 fail = 0
                 succ = 3
                 break
@@ -406,12 +443,13 @@ class UncertainTrust(OptSubproblem):
                 # Estimate the inexact gradient condition now rather than later
                 # lhs0 = lhs = self.prob_model.model.stat.sampler.rcrit.get_energy()#np.linalg.norm(gmod-gtru)
                 lhs0 = None
-                rhs0 = min(gerrm, self.sdist)
+                rhs0 = min(gerrm, self.sdist) #use unscaled sdist, since the lagrangian won't be scaled either
                 # xi_calc = lhs0/rhs0
 
                 lhs, rhs = self.model_refiner(lhs0, rhs0)
 
                 # if we reach the reflevel limit, exit the optimization here and continue with full accuracy
+                #NOTE: MAY NEED TO BE CAREFUL WITH RESPECT TO FEASABILITY
                 if self.reflevel[-1] > self.options["truth_func_err_est_max"]:
                     fail = 3
                     succ = 0
@@ -493,7 +531,7 @@ class UncertainTrust(OptSubproblem):
             # right now this is Rodriguez (1998), if eta_0 and eta_1 are the same
             if not accept:
                 # trust_radius = gamma_1*trust_radius
-                trust_radius = gamma_1*self.sdist
+                trust_radius = gamma_1*self.sdist_sc
             # remaining conditions apply for accepted steps
             elif eta_k_act < eta_1:
                 trust_radius = gamma_1*trust_radius
@@ -530,16 +568,19 @@ class UncertainTrust(OptSubproblem):
 
             # define the LHS, compute gtru depending on how we do this
             if not self.options["model_grad_err_est"]: # get the actual gradient error
-                self.gtru = self.prob_truth.compute_totals(return_format='array')
-                self.gerr = np.linalg.norm(self.gtru)
+                if con_test:
+                    self.gtru, self.gerr, self.gfea, dummy = grad_opt_feas(self.prob_model, self.have_cons, self.ctol)
+                else:
+                    self.gtru = self.prob_model.compute_totals(return_format='array')
+                    self.gerr = np.linalg.norm(self.gtru)
 
                 lhs0 = np.linalg.norm(gmod-self.gtru)
                 rhs0 = min(gerrm, self.sdist)
                 xi_calc = lhs0/rhs0
                 # def compute_lhs():
             else:
-                self.gtru = gmod
-                self.gerr = gerrm 
+                # self.gtru = gmod
+                # self.gerr = gerrm 
                 lhs0 = lhs
                 rhs0 = rhs
 
@@ -558,13 +599,13 @@ class UncertainTrust(OptSubproblem):
 
 
             #If g truth metrics are not met, 
-            if self.gerr < self.gtol and not self.options["inexact_gradient_only"]:
+            if self.gerr < self.gtol and gfeam < self.ctol and not self.options["inexact_gradient_only"]:
                 fail = 0
                 succ = 1
                 break
 
             # Alternatively, use the inexact gradient condition
-            if lhs0 < self.xi*rhs0 and gerrm < self.gtol:
+            if lhs0 < self.xi*rhs0 and gerrm < self.gtol and gfeam < self.ctol:
                 fail = 0
                 succ = 2
                 break
@@ -595,7 +636,7 @@ class UncertainTrust(OptSubproblem):
             print(f"O       LHS: {lhs}")
             print(f"O       RHS: {rhs}")
             print(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
-            # import pdb; pdb.set_trace()
+            # 
 
         if k >= miter:
             succ = 0
@@ -673,7 +714,7 @@ class UncertainTrust(OptSubproblem):
                 print(f"O       Strategy = Proximity to Convergence")
                 print(f"O       Relative Proximity = {gclose}| Minimum Refinement = {rmin}")
                 print(f"O       Current Level = {self.reflevel[-1]}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
-            # import pdb; pdb.set_trace()
+            # 
 
 
         # Ensure that the inexact gradient condition is met by adding enough points
@@ -701,7 +742,7 @@ class UncertainTrust(OptSubproblem):
                 rk += 1
                 refjump = rmin
                 estat = 'flat'
-                      # import pdb; pdb.set_trace()
+                      # 
                 if self.options["model_grad_err_est"]:
                     estat = 'adaptive'
                     refjump_max = max(rmin, self.options["truth_func_err_est_max"])
@@ -711,13 +752,21 @@ class UncertainTrust(OptSubproblem):
                     
                     self.cur_tol = -1.0
                     self.stop_update = False
+                    self.duals = None # start with duals uninitialized
                     def xirhs(nmodel):
                         if not self.stop_update: # if the gradient isn't changing much, there's no point to constantly recomputing it
                             self.prob_model.model.stat.surrogate = nmodel
-                            gmod = self.prob_model.compute_totals(return_format='array')
-                            gerrm = np.linalg.norm(gmod)
+                            
+                            if con_test:
+                                #NOTE: need to recompute totals? TODO only do this for the robust surrogate part
+                                dummy = self.prob_model.compute_totals(of="stat.musigma", wrt="x_d", return_format='array')
+                                gmod, gerrm, gfeam, self.duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol, duals_given=self.duals)
+                            else:
+                                gmod = self.prob_model.compute_totals(return_format='array')
+                                gerrm = np.linalg.norm(gmod)
+
                             new_tol = self.xi*min(self.sdist, gerrm)
-                            if abs(new_tol - self.cur_tol) < 1e-6:
+                            if abs(new_tol - self.cur_tol) < 1e-6 and not self.no_stall:
                                 self.stop_update = True
                             self.cur_tol = new_tol
                         return self.cur_tol
@@ -728,8 +777,11 @@ class UncertainTrust(OptSubproblem):
                 else:
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump)
                     self.prob_model.run_model()
-                    gmod = self.prob_model.compute_totals(return_format='array')
-                    gerrm = np.linalg.norm(gmod)
+                    if con_test:
+                        gmod, gerrm, gfeam = grad_opt_feas(self.prob_model, self.have_cons, self.ctol)
+                    else:
+                        gmod = self.prob_model.compute_totals(return_format='array')
+                        gerrm = np.linalg.norm(gmod)
                     
                 self.reflevel.append(reflog[-1,2])
                 
@@ -769,5 +821,14 @@ class UncertainTrust(OptSubproblem):
             self.reflevel.append(refjump)
 
         self.reflog.append(reflog)
-
+        self.gerr = gerrm
+        # self.gtru = gmod
         return lhs, rhs
+    
+
+
+    # def lagrangian_eval(problem):
+
+
+
+    #     return dL, LO, LF

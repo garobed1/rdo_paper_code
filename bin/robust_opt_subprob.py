@@ -92,6 +92,16 @@ pdfs = oset.pdfs
 t_dim = u_dim + d_dim
 func = GetProblem(oset.prob, t_dim)
 xlimits = func.xlimits
+try:
+    p_con = oset.p_con
+    p_eq = oset.p_eq
+    p_ub = oset.p_ub
+    p_lb = oset.p_lb
+except:
+    p_con = False
+    p_eq = None
+    p_ub = None
+    p_lb = None
 
 # uq settings
 use_surrogate = oset.use_surrogate
@@ -216,6 +226,10 @@ else:
                           external_only=external_only)
 
 
+### NOTE NOTE NOTE ###
+### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
+excomp = om.ExecComp('y = x*0.2')
+
 
 ### TRUTH OPENMDAO SETUP ###
 probt = om.Problem()
@@ -237,7 +251,13 @@ probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
-probt.model.add_objective("stat.musigma")
+if p_con:
+    probt.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
+    probt.model.add_subsystem('comp_obj', excomp)
+    probt.model.connect('x_d', 'comp_obj.x')
+    probt.model.add_objective("comp_obj.y")
+else:
+    probt.model.add_objective("stat.musigma")
 probt.setup()
 probt.run_model()
 
@@ -306,23 +326,16 @@ probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
 # probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
-# dvdict = probm.model.get_design_vars()
-# probm.setup()
+if p_con:
+    probm.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
+    probm.model.add_subsystem('comp_obj', excomp)
+    probm.model.connect('x_d', 'comp_obj.x')
+    probm.model.add_objective("comp_obj.y")
+else:
+    probm.model.add_objective("stat.musigma")
 
-### TRUST OPTIMIZATION OPENMDAO SETUP ###
-if trust_region_bound == 1:
-    # connect all dvs 
-    dv_settings = dvdict
-    probm.model.add_subsystem('trust', 
-                              TrustBound(dv_dict=dv_settings, 
-                                            initial_trust_radius=initial_trust_radius), 
-                                            promotes_inputs=list(dv_settings.keys()))
-    probm.model.add_constraint('trust.c_trust', lower=0.0)
-    # probm.model.trust.add_input("x_d", val=x_init)
-    # probm.model.trust.set_center(zk)
-    # probm.model.connect("x_d", "trust.x_d")
-# if 2, handle with changing dv bounds internally DEFAULT BEHAVIOR USE THIS
-probm.model.add_objective("stat.musigma")
+#TODO:: ADD CONSTRAINTS NOW
+
 if trust_region_bound: #anything but 0
     sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
                                     xi=xi,
@@ -377,7 +390,7 @@ succ, fail = sub_optimizer.solve_full()
 
 # if fail > 0:
 if 1:
-    sub_optimizer.prob_truth.set_val("stat.x_d", sub_optimizer.result_cur)
+    sub_optimizer.prob_truth.set_val("x_d", sub_optimizer.result_cur)
     sub_optimizer.prob_truth.run_driver()
 
 

@@ -9,10 +9,12 @@ from optimization.opt_subproblem import SequentialFullSolve
 from optimization.opt_trust_uncertain import UncertainTrust
 from surrogate.pougrad import POUHessian
 from collections import OrderedDict
+from utils.om_utils import grad_opt_feas
 import os, copy
 from functions.problem_picker import GetProblem
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from optimization.defaults import DefaultOptOptions
+from utils.sutils import convert_to_smt_grads
 import argparse
 from mpi4py import MPI
 import pickle
@@ -22,6 +24,7 @@ rank = comm.Get_rank()
 size = comm.Get_size()
 
 plt.rcParams['font.size'] = '15'
+plt.rcParams['savefig.dpi'] = 600
 
 """
 Plot robust trust optimization results
@@ -38,7 +41,7 @@ parser.add_argument('-s', '--skip_most', action='store_true', help = 'skip first
 args = parser.parse_args()
 optdir = args.optdir
 skip = args.skip_most
-
+# skip = True
 # import settings from given config files
 root = os.getcwd()
 optsplit = optdir.split(sep='/')
@@ -122,7 +125,16 @@ approximate_model = oset.approximate_model
 approximate_truth = oset.approximate_truth
 approximate_truth_max = oset.approximate_truth_max
 trust_increase_terminate = oset.trust_increase_terminate
-
+try:
+    p_con = oset.p_con
+    p_eq = oset.p_eq
+    p_ub = oset.p_ub
+    p_lb = oset.p_lb
+except:
+    p_con = False
+    p_eq = None
+    p_ub = None
+    p_lb = None
 
 ### SAMPLING STRATEGY ###
 sample_type = oset.sample_type
@@ -221,6 +233,13 @@ else:
                           external_only=external_only)
 
 
+### NOTE NOTE NOTE ###
+### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
+excomp = om.ExecComp('y = x*0.2')
+excomp2 = om.ExecComp('y = x*0.2')
+probex = om.Problem()
+probex.model.add_subsystem('det_obj', excomp2)
+probex.setup()
 
 ### TRUTH OPENMDAO SETUP ###
 probt = om.Problem()
@@ -242,7 +261,13 @@ probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
-probt.model.add_objective("stat.musigma")
+if p_con:
+    probt.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
+    probt.model.add_subsystem('comp_obj', excomp)
+    probt.model.connect('x_d', 'comp_obj.x')
+    probt.model.add_objective("comp_obj.y")
+else:
+    probt.model.add_objective("stat.musigma")
 probt.setup()
 # probt.run_model()
 
@@ -267,7 +292,13 @@ probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP')
 # probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
-probm.model.add_objective("stat.musigma")
+if p_con:
+    probm.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
+    probm.model.add_subsystem('comp_obj', excomp)
+    probm.model.connect('x_d', 'comp_obj.x')
+    probm.model.add_objective("comp_obj.y")
+else:
+    probm.model.add_objective("stat.musigma")
 probm.setup()
 
 ### CONVERGENCE PLOTS ###
@@ -302,13 +333,19 @@ if not skip:
         prob_truth.iter_max = probt.model.iter_count - 1
         prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
 
+    print(" ")
+    print(probt.model.stat.func_calls)
+    print(probt.get_val("stat.x_d"))
+    print(probt.get_val("stat.musigma"))
+
     gerrm_post = np.zeros(prob_truth.iter_max)
     realizations_post = np.zeros(prob_truth.iter_max)
     for i in range(1, prob_truth.iter_max + 1):
         probt.set_val('stat.x_d', prob_truth.design_history[i])
         probt.run_model()
-        gmod = probt.compute_totals(return_format='array')
-        gerrm_post[i-1] = np.linalg.norm(gmod)
+        gmod, gerrm_post[i-1], gfeam, duals = grad_opt_feas(probt, p_con, 1e-5)
+        # gmod = probt.compute_totals(return_format='array')
+        # gerrm_post[i-1] = np.linalg.norm(gmod)
         realizations_post[i-1] = prob_truth.current_samples['x'].shape[0]*(i-1)
 
     ind = copy.deepcopy(prob_truth.iter_max)
@@ -333,50 +370,83 @@ if not skip:
     probt.model.connect("x_d", "stat.x_d")
     probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
     # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
-    probt.model.add_objective("stat.musigma")
+    if p_con:
+        probt.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
+        probt.model.add_subsystem('comp_obj', excomp)
+        probt.model.connect('x_d', 'comp_obj.x')
+        probt.model.add_objective("comp_obj.y")
+    else:
+        probt.model.add_objective("stat.musigma")
     probt.setup()
     probt.run_driver()
-    x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
+    x_opt_true = copy.deepcopy(probt.get_val("stat.x_d"))
 
+    print(" ")
+    print(probt.model.stat.func_calls)
+    print(x_opt_true)
+    print(probt.get_val("stat.musigma"))
 
     # plot conv
     full_calls = probt.model.stat.func_calls
     full_calls = full_calls[:-1]
     full_objs = probt.model.stat.objs
     full_objs = full_objs[:-1]
-    full_grads = probt.model.stat.grads
+    full_iters = probt.model.stat.sampler.design_history
+    full_iters = full_iters[:-1]
     full_grad_norms = []
-    for i in range(len(full_grads)):
-        full_grad_norms.append(np.linalg.norm(full_grads[i]))
+    for x_d in full_iters:
+        probt.set_val('x_d', x_d)
+        gtru, gerrt, gfeat, dualst = grad_opt_feas(probt, p_con, 1e-5)
+        full_grad_norms.append(gerrt)
+    # full_grads = probt.model.stat.grads #TODO: DON'T RESET DUALS??? SOMEHOW???
+    # for i in range(len(full_grads)):
+    #     full_grad_norms.append(np.linalg.norm(full_grads[i]))
     while len(full_objs) > len(full_grad_norms):
         full_grad_norms.insert(-2, full_grad_norms[-2])
-    plt.rcParams["figure.figsize"] = (10,3.5)
+    default_dim = copy.deepcopy(plt.rcParams["figure.figsize"])
+    # plt.rcParams["figure.figsize"] = (10,3.5)
+    plt.figure(figsize=(12,4.2))
     for i in range(niter-1):
         plt.plot(realizations[i] + reflog[i][:,2], reflog[i][:,1], 'r')
         plt.plot(realizations[i] + reflog[i][:,2], reflog[i][:,0], 'b')
         plt.axvline(realizations[i], color='k', linestyle='--', linewidth=1.2)
     if prob_truth.iter_max > 0:
         plt.plot(realizations[i] + reflog[i][-1,2] + realizations_post, 
-                    gerrm_post, 'g', label=r'$\|\hat{S}^T_k(x_d)\|$ (SLSQP post)')
+                    gerrm_post, 'g', label=r'$\|\nabla\hat{S}^T_k(x_d)\|$ (SLSQP post)')
 
     true_fm = copy.deepcopy(probt.model.stat.objs[-1])
-    plt.plot(full_calls, full_grad_norms, '-m', label=r'$\|\hat{S}^T_k(x_d)\|$ (SLSQP full)')
+    plt.plot(full_calls, full_grad_norms, '-m', label=r'$\|\nabla\hat{S}^T_k(x_d)\|$ (SLSQP full)')
 
     plt.xscale('log')
     plt.yscale('log')
     plt.xlabel(r'Number of Realizations')
     plt.ylabel(r'Gradient Magnitude')
     plt.grid()
-    plt.plot([],[], 'r', label=r'$\|\hat{S}^M_k(x_d)\|$')
+    plt.plot([],[], 'r', label=r'$\|\nabla\hat{S}^M_k(x_d)\|$')
     plt.plot([],[], 'b', label=r'$\bar{\beta}_M$')
-    # plt.legend(fontsize='11')
+    plt.legend(fontsize='11')
     plt.savefig(f"/{root}/{path}/{title}/plots/lhs_rhs.png", bbox_inches="tight")
     plt.clf()
-    plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
-
+    # plt.rcParams["figure.figsize"] = (6.4, 4.8)
+import pdb; pdb.set_trace()
+# plt.figure(figsize=(7,3.2))
+plt.figure(figsize=(8.5,4.5))
 loc[0] = loc[0]['dvs.x_d']
 loc = loc[:-1]
 locval = []
+
+# need to append the 2nd model
+modelapp = copy.deepcopy(models[1])
+xtapp = modelapp.training_points[None][0][0][:realizations[1]]
+ftapp = modelapp.training_points[None][0][1][:realizations[1]]
+gtapp = convert_to_smt_grads(modelapp)[:realizations[1],:]
+modelapp.set_training_values(xtapp, ftapp)
+convert_to_smt_grads(modelapp, x_array=xtapp, g_array=gtapp)
+modelapp.train()
+models.insert(1, modelapp)
+#also, override niter to make this faster
+# niter = 3
+
 # reevaluate locs
 for i in range(len(loc)):
     probm.model.stat.surrogate = models[i]
@@ -390,96 +460,199 @@ print(locval)
 
 # design space plots
 if d_dim == 1:
-    ndir = 120
+    ndir = 180
     x = np.linspace(xlimits[prob_truth.x_d_ind][0,0], xlimits[prob_truth.x_d_ind][0,1], ndir)
     yt = np.zeros([ndir])
     for j in range(ndir):
         probt.set_val("stat.x_d", x[j])
         probt.run_model()
         yt[j] = probt.get_val("stat.musigma")
+
+    nrow = 1
+    if p_con: nrow = 2
+    fig = plt.figure(figsize=(8.5, nrow*4.5))
+    ax = fig.subplots(nrow, 1, sharex=True, gridspec_kw=dict(hspace=0)) 
+
     minind = np.argmin(yt)
     ym = np.zeros([niter, ndir])
-    plt.plot(x, yt, label='objective')
-    plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
-    plt.xlabel(r'$x_d$')
-    plt.ylabel(r'$\hat{S}(x_d)$')
-    plt.savefig(f"/{root}/{path}/{title}/plots/true_int.png", bbox_inches="tight")
-    plt.clf()
-    for i in range(niter):
+    p_label = 'objective'
+    if p_con:
+        p_label = 'constraint'
+    ax[0].plot(x, yt, label=p_label)
+    if not p_con:
+        ax[0].axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+
+    if p_con:
+        # get objective data
+        ot = np.zeros([ndir])
+        for j in range(ndir):
+            probex.set_val("det_obj.x", x[j])
+            probex.run_model()
+            ot[j] = probex.get_val("det_obj.y")
+
+        #intersections
+        if p_ub is not None:
+            ax[0].axhline(p_ub, color='r', linestyle='--', linewidth=1.2, label = 'Upper Bound')
+            idx_ub = np.argwhere(np.diff(np.sign(yt - p_ub))).flatten()
+            ax[0].plot(x[idx_ub], yt[idx_ub], 'ro')
+        if p_lb is not None:
+            ax[0].axhline(p_lb, color='b', linestyle='--', linewidth=1.2, label = 'Lower Bound')
+            idx_lb = np.argwhere(np.diff(np.sign(yt - p_lb))).flatten()
+            ax[0].plot(x[idx_lb], yt[idx_lb], 'bo')
+
+    ax[0].set_xlim([xlimits_d[0,0],xlimits_d[0,1]])
+    ax[0].set_xlabel(r'$x_d$')
+    ax[0].set_ylabel(r'$\hat{S}(x_d)$')
+    ax[0].legend(fontsize='12')
+    # plt.savefig(f"/{root}/{path}/{title}/plots/true_int.png", bbox_inches="tight")
+    # plt.clf()
+    if p_con:
+        ax[1].plot(x, ot, label='objective (det)')
+        if p_ub is not None:
+            for k in range(idx_ub.size):
+                plt.axvline(x[idx_ub[k]], color='m', linestyle='--')
+        if p_lb is not None:
+            for k in range(idx_lb.size):
+                plt.axvline(x[idx_lb[k]], color='m', linestyle='--')
+        ax[1].plot([],[], color='m', linestyle='--', label = 'constraint bounds')
+        ax[1].axvline(loc[-1], color='k', linestyle='--', linewidth=1.1, label = 'sol')
+        ax[1].legend(fontsize='12')
+        ax[1].set_xlabel(r'$x_d$')
+        ax[1].set_ylabel(r'Objective')
+        # plt.savefig(f"/{root}/{path}/{title}/plots/true_detobj.png", bbox_inches="tight")
+        # plt.clf()
+    fig.savefig(f"/{root}/{path}/{title}/plots/true_prob.png", bbox_inches="tight")
+    fig.clf()
+
+    for i in range(niter-1):
+
+        fig = plt.figure(figsize=(8.5, nrow*4.5))
+        ax = fig.subplots(nrow, 1, sharex=True, gridspec_kw=dict(hspace=0)) 
+
         probm.model.stat.surrogate = models[i]
         for j in range(ndir):
             probm.set_val("stat.x_d", x[j])
             probm.run_model()
             ym[i,j] = probm.get_val("stat.musigma")
+
+
         # plt.autoscale(True)
-        plt.plot(x, yt, label='objective')
-        xlim = plt.gca().get_xlim()
-        ylim = plt.gca().get_ylim()
-        plt.plot(x, ym[i,:], label=f'model {i}')
-        plt.axvline(loc[i], color='b', linestyle='-', linewidth=1.2)
-        plt.axvline(loc[i]+radii[i], color='b', linestyle='-', linewidth=1.0)
-        plt.axvline(loc[i]-radii[i], color='b', linestyle='-', linewidth=1.0)
-        if i < niter - 1:
-            plt.axvline(loc[i+1], color='g', linestyle='-', linewidth=1.4)
-        plt.axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
+        ax[0].plot(x, yt, label=f'True {p_label}')
+        xlim = ax[0].get_xlim()
+        ylim = ax[0].get_ylim()
+        ax[0].plot(x, ym[i,:], label=f'Model {p_label} Iter. {i}')
+        ax[0].axvline(loc[i], color='b', linestyle='-', linewidth=1.2)
+        # plt.axvline(loc[i]+radii[i], color='b', linestyle='-', linewidth=1.0)
+        # plt.axvline(loc[i]-radii[i], color='b', linestyle='-', linewidth=1.0)
+        tsc = xlimits_d[0,1] - xlimits_d[0,0]
+        ax[0].fill_betweenx(ylim,  [loc[i][0]-radii[i]*tsc, loc[i][0]-radii[i]*tsc], [loc[i][0]+radii[i]*tsc, loc[i][0]+radii[i]*tsc],  color = 'g', alpha=0.2)
+        if i < niter - 2:
+            ax[0].axvline(loc[i+1], color='r', linestyle='-', linewidth=1.5)
+        if not p_con:
+            ax[0].axvline(x[minind], color='k', linestyle='--', linewidth=1.2)
 
         fac = 1
-        if i > 0:
-            fac = 2
+        # if i > 0:
+        #     fac = 2
         for line in loc[:i+fac]:
-            plt.axvline(line[0], color='k')
-        plt.scatter(loc[:i+fac], locval[:i+fac], color='r', marker='x')
-        plt.xlim(xlim)
-        plt.ylim(ylim)
-        plt.xlabel(r'$x_d$')
-        plt.ylabel(r'$\hat{S}(x_d)$')
-        plt.legend(fontsize='13')
-        plt.savefig(f"/{root}/{path}/{title}/plots/model_evo_int_{i}.png", bbox_inches="tight")
-        plt.clf()
+            ax[0].axvline(line[0], color='k')
+        ax[0].scatter(loc[:i+fac], locval[:i+fac], color='r', marker='x')
 
-# full space plots
-if t_dim == 2:
-    ndir = 40
-    x = np.linspace(xlimits[prob_truth.x_d_ind][0,0], xlimits[prob_truth.x_d_ind][0,1], ndir)
-    y = np.linspace(xlimits[prob_truth.x_u_ind][0,0], xlimits[prob_truth.x_u_ind][0,1], ndir)
-    X, Y = np.meshgrid(x, y)
-    FT = np.zeros([ndir,ndir])
-    for i in range(ndir):
-        for j in range(ndir):
-            xi = np.zeros([1,2])
-            xi[0,prob_truth.x_d_ind] = x[i]
-            xi[0,prob_truth.x_u_ind] = y[j]
-            FT[i,j] = func(xi)
-    
-    cs = plt.contourf(X, Y, FT, levels = 15)
-    plt.xlabel(r'$x_d$')
-    plt.ylabel(r'$x_u$')
-    plt.colorbar(cs, label=r'$F(x_d, x_u)$')
-    plt.savefig(f"/{root}/{path}/{title}/plots/true_full.png", bbox_inches="tight")
-    plt.clf()
-    
-    for k in range(niter):
-        probm.model.stat.surrogate = models[k]
-        FM = np.zeros([ndir, ndir]) 
-        for i in range(ndir):
-            for j in range(ndir):
-                xi = np.zeros([1,2])
-                xi[0,prob_truth.x_d_ind] = x[i]
-                xi[0,prob_truth.x_u_ind] = y[j]
-                FM[i,j] = models[k].predict_values(xi)
-        plt.contourf(X, Y, FM, levels = 15)
-        plt.scatter(models[k].training_points[None][0][0][:,prob_truth.x_d_ind[0]], 
-                    models[k].training_points[None][0][0][:,prob_truth.x_u_ind[0]], color='r', marker='x')
-        fac = 1
-        if k > 0:
-            fac = 2
-        for line in loc[:k+fac]:
-            plt.axvline(line[0], color='k')
-        plt.xlabel(r'$x_d$')
-        plt.ylabel(r'$x_u$')
-        plt.colorbar(cs, label=r'$\hat{f}(x_d, x_u)$')
-        plt.savefig(f"/{root}/{path}/{title}/plots/model_evo_full_{k}.png", bbox_inches="tight")
-        plt.clf()
+        if p_con:
+            if p_ub is not None:
+                ax[0].axhline(p_ub, color='r', linestyle='--', linewidth=1.2, label = 'Upper Bound')
+                idx_ub = np.argwhere(np.diff(np.sign(ym[i,:] - p_ub))).flatten()
+                ax[0].plot(x[idx_ub], ym[i,idx_ub], 'ro')
+            if p_lb is not None:
+                ax[0].axhline(p_lb, color='b', linestyle='--', linewidth=1.2, label = 'Lower Bound')
+                idx_lb = np.argwhere(np.diff(np.sign(ym[i,:] - p_lb))).flatten()
+                ax[0].plot(x[idx_lb], ym[i,idx_lb], 'bo')
+
+
+        ax[0].set_xlim([xlimits_d[0,0],xlimits_d[0,1]])
+        ax[0].set_ylim(ylim)
+        ax[0].set_xlabel(r'$x_d$')
+        ax[0].set_ylabel(r'$\hat{S}(x_d)$')
+        ax[0].legend(fontsize='12')
+        # plt.savefig(f"/{root}/{path}/{title}/plots/model_evo_int_{i}.png", bbox_inches="tight")
+        # plt.clf()
+
+        # now do objective if the robust quantity is a constraint
+        if p_con:
+            ax[1].plot(x, ot, label='objective (det)')
+            if p_ub is not None:
+                for k in range(idx_ub.size):
+                    ax[1].axvline(x[idx_ub[k]], color='m')
+            if p_lb is not None:
+                for k in range(idx_lb.size):
+                    ax[1].axvline(x[idx_lb[k]], color='m')
+            for line in loc[:i+fac]:
+                ax[1].axvline(line[0], color='k')
+            if i < niter - 2:
+                ax[1].axvline(loc[i+1], color='r', linestyle='-', linewidth=1.5)
+            ax[1].set_xlabel(r'$x_d$')
+            ax[1].set_ylabel(r'Objective')
+            ax[1].legend(fontsize='12')
+            # fig.subplots_adjust(hspace=0)                                            
+            # plt.savefig(f"/{root}/{path}/{title}/plots/detobj_evo_int_{i}.png", bbox_inches="tight")
+            # plt.clf()
+        
+        fig.savefig(f"/{root}/{path}/{title}/plots/prob_evo_int_{i}.png", bbox_inches="tight")
+        fig.clf()
+
+
+# # full space plots
+# if t_dim == 2:
+#     fig = plt.figure(figsize=(7,3.2))
+#     ndir = 40
+#     x = np.linspace(xlimits[prob_truth.x_d_ind][0,0], xlimits[prob_truth.x_d_ind][0,1], ndir)
+#     y = np.linspace(xlimits[prob_truth.x_u_ind][0,0], xlimits[prob_truth.x_u_ind][0,1], ndir)
+#     X, Y = np.meshgrid(x, y)
+#     FT = np.zeros([ndir,ndir])
+#     for i in range(ndir):
+#         for j in range(ndir):
+#             xi = np.zeros([1,2])
+#             xi[0,prob_truth.x_d_ind] = x[i]
+#             xi[0,prob_truth.x_u_ind] = y[j]
+#             FT[i,j] = func(xi)
+
+#     cs = plt.contourf(X, Y, FT.T, levels = 15)
+#     plt.xlabel(r'$x_d$')
+#     plt.ylabel(r'$x_u$')
+#     plt.colorbar(cs, label=r'$f(x_d, x_u)$')
+#     plt.savefig(f"/{root}/{path}/{title}/plots/true_full.png", bbox_inches="tight")
+#     plt.clf()
+#     for k in range(niter):
+#         probm.model.stat.surrogate = models[k]
+#         FM = np.zeros([ndir, ndir]) 
+#         for i in range(ndir):
+#             for j in range(ndir):
+#                 xi = np.zeros([1,2])
+#                 xi[0,prob_truth.x_d_ind] = x[i]
+#                 xi[0,prob_truth.x_u_ind] = y[j]
+#                 FM[i,j] = models[k].predict_values(xi)
+#         plt.contourf(X, Y, FM.T, levels = 15)
+#         fac = 1
+#         if k > 1:
+#             fac = 2
+#         for line in loc[:k+fac]:
+#             plt.axvline(line[0], color='k')
+#         plt.scatter(models[k].training_points[None][0][0][:,prob_truth.x_d_ind[0]], 
+#                     models[k].training_points[None][0][0][:,prob_truth.x_u_ind[0]], color='r', marker='x', zorder=10000)
+#         plt.xlabel(r'$x_d$')
+#         plt.ylabel(r'$x_u$')
+#         cb_ax = fig.add_axes([.91,.124,.04,.754])
+#         plt.colorbar(cs, label=r'$\hat{f}(x_d, x_u)$', cax=cb_ax)
+#         plt.savefig(f"/{root}/{path}/{title}/plots/model_evo_full_{k}.png", bbox_inches="tight")
+#         plt.clf()
+
+
+
+
+
+
+
+
 ### ORIGINAL FUNCTION PLOT ###
 # ndir = 600
 # x = np.linspace(xlimits[1][0], xlimits[1][1], ndir)

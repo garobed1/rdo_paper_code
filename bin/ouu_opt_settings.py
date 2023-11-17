@@ -7,9 +7,17 @@ path = '.'
 
 
 ##### problem #####
+"""
+This function can serve as an objective or a constraint
+Only support this one robust quantity for the time being
+"""
 u_dim = 1
 d_dim = 1
 prob = 'betatestex'
+p_con = False
+p_eq = None
+p_ub = 3.
+p_lb = None
 
 # refinement threshold strategies
 """
@@ -35,7 +43,7 @@ design_noise_act = 0.0
 ##### trust region #####
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
-initial_trust_radius = 1.0
+initial_trust_radius = 0.1 #"""We're making this relative to the design bound scale"""
 xi = 1.0
 # eta1
 # eta2

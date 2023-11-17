@@ -9,6 +9,14 @@ from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.stats import qmc
 from utils.sutils import estimate_pou_volume, innerMatrixProduct, quadraticSolveHOnly, symMatfromVec
 from utils.sutils import standardization2
+
+para = False
+try:
+    from numba import njit, prange
+    para = True
+except:
+    pass
+
 #from pou_cython_ext import POUEval
 
 """
@@ -93,6 +101,7 @@ class POUSurrogate(SurrogateModel):
             Output values at the prediction points.
         
     """
+    # @njit(parallel=True)
     def _predict_values(self, xt):
 
         X_cont = (xt - self.X_offset) / self.X_scale
@@ -125,7 +134,8 @@ class POUSurrogate(SurrogateModel):
 
         # loop over rows in xt
         y_ = np.zeros(numeval)
-        for k in range(numeval):
+        for k in range(numeval): ###NOTE: TURN INTO PRANGE?
+        # for k in prange(numeval): ###NOTE: TURN INTO PRANGE?
             x = X_cont[k,:]
 
             numer = 0
@@ -186,6 +196,7 @@ class POUSurrogate(SurrogateModel):
         
     """
     #TODO: Cache points to skip min dist calcs?
+    # @njit(parallel=True)
     def _predict_derivatives(self, xt, kx):
 
         X_cont = (xt - self.X_offset) / self.X_scale
@@ -221,6 +232,7 @@ class POUSurrogate(SurrogateModel):
         d2_ = np.zeros(numeval)
         d3_ = np.zeros(numeval)
         for k in range(numeval):
+        # for k in prange(numeval):
             x = X_cont[k,:]
 
             numer = 0

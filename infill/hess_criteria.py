@@ -12,8 +12,14 @@ from scipy.stats import qmc
 from scipy.spatial import KDTree
 from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.optimize import Bounds
-from utils.sutils import innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2
+from utils.sutils import innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2, gen_dist_func_nb
 
+# para = False
+# try:
+#     from numba import jit, njit, prange
+#     para = True
+# except:
+#     pass
 
 """
 Refine based on a first-order Taylor approximation using the gradient. Pull 
@@ -185,24 +191,25 @@ class HessianRefine(ASCriteria):
         # exhaustive search for closest sample point, for regularization
         # import pdb; pdb.set_trace()
         # D = cdist(np.array([x]), trx)
-        if self.energy_mode:
-            if self.D_cache is None:
-                self.D_cache = cdist(X_cont, trx)
-            else:
-                diff = trx.shape[0] - self.D_cache.shape[1]
-                if diff > 0:
-                    self.D_cache = np.hstack([self.D_cache, cdist(X_cont, trx[-diff:,:])])
+        # distf = gen_dist_func_nb(parallel=True)
+        distf = cdist
+        if self.energy_mode and  self.D_cache is None:
+            diff = trx.shape[0] - self.D_cache.shape[1]
+
+            if diff > 0:
+                self.D_cache = np.hstack([self.D_cache, distf(X_cont, trx[-diff:,:])])
 
             D = self.D_cache
 
         else:
-            D = cdist(X_cont, trx)
+            D = distf(X_cont, trx)
         mindist = np.min(D, axis=1)
 
         fac = self.dV*Mc
         y_ = np.zeros(numeval)
         if self.energy_mode:
             y_ = np.zeros([numeval, self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            # for k in range(numeval):
             for k in range(numeval):
             
                 work = X_cont[k,:] - trx
@@ -216,6 +223,7 @@ class HessianRefine(ASCriteria):
 
         else: 
             for k in range(numeval):
+            # for k in prange(numeval):
 
                 work = X_cont[k,:] - trx
                 dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
@@ -226,8 +234,11 @@ class HessianRefine(ASCriteria):
         
                 y_[k] = numer/denom
 
+        # y_ = pou_crit_loop(X_cont, D, trx, fac, mindist, delta, self.energy_mode, self.higher_terms, self.H, self.rho)
         
         ans = -abs(y_)
+
+
 
         """
         from stack: do this
@@ -255,8 +266,15 @@ class HessianRefine(ASCriteria):
             ans += np.exp(-self.rho*(dirdist+ delta))
 
         return ans 
+    
 
 
+
+
+
+
+
+    # @njit(parallel=True)
     def _eval_grad(self, x, bounds, dir=0):
         X_cont = np.atleast_2d(x)
         numeval = X_cont.shape[0]
@@ -279,6 +297,7 @@ class HessianRefine(ASCriteria):
         y_ = np.zeros(numeval)
         dy_ = np.zeros([numeval, dim])
         for k in range(numeval):
+        # for k in prange(numeval):
 
             # for i in range(self.ntr):
             work = X_cont[k,:] - trx 
@@ -448,5 +467,59 @@ class HessianGradientRefine(HessianRefine):
 
 
 
+# def rcrit_func_e(k, X_cont, D, trx, fac, mindist, delta, energy_mode, higher_terms, H, rho):        
+#     work = X_cont[k,:] - trx
+#     dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+#     local = np.einsum('ij,i->ij', higher_terms(work, None, H), fac) # NEWNEWNEW
+#     expfac = np.exp(-rho*(dist-mindist[k]))
+#     numer = np.einsum('ij,i->j', local, expfac)
+#     denom = np.sum(expfac)
+
+#     # y_[k] = numer/denom
+#     return numer/denom
 
 
+# def rcrit_func(k, X_cont, D, trx, fac, mindist, delta, energy_mode, higher_terms, H, rho):        
+#     work = X_cont[k,:] - trx
+#     dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+#     local = higher_terms(work, None, H)*fac # NEWNEWNEW
+#     expfac = np.exp(-rho*(dist-mindist[k]))
+#     numer = np.dot(local, expfac)
+#     denom = np.sum(expfac)
+
+#     return numer/denom
+#     # y_[k] = numer/denom
+
+
+# import multiprocessing
+# from functools import partial
+
+# def pou_crit_loop(X_cont, D, trx, fac, mindist, delta, energy_mode, higher_terms, H, rho):
+#     numeval = X_cont.shape[0]
+#     y_ = np.zeros(numeval)
+#     pool = multiprocessing.Pool(8)
+#     args = (range(numeval), X_cont, D, trx, fac, mindist, delta, energy_mode, higher_terms, H, rho)
+#     if energy_mode:
+#         y_ = np.zeros([numeval, higher_terms(X_cont[0,:] - trx, None, H).shape[1]])
+#         # for k in range(numeval):
+#         funcx = partial(rcrit_func_e, X_cont=X_cont, D=D, trx=trx, fac=fac, mindist=mindist, delta=delta, energy_mode=energy_mode, higher_terms=higher_terms, H=H, rho=rho)
+#     else:
+#         funcx = partial(rcrit_func, X_cont=X_cont, D=D, trx=trx, fac=fac, mindist=mindist, delta=delta, energy_mode=energy_mode, higher_terms=higher_terms, H=H, rho=rho)
+        
+#     y_ = pool.map(funcx, range(numeval))
+
+#     return np.array(y_)
+
+
+"""
+Overhead makes this too slow, not enough benefit
+
+serial: 0.33
+
+parallel 1: 0.44
+
+parallel 4: 0.23
+parallel 8: 0.21
+
+
+"""
