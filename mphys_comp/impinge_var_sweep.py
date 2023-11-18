@@ -73,12 +73,12 @@ for i in cases[rank]:
     prob.set_val("dv_struct_TRUE", x[i])
     prob.run_model()
     y = np.zeros(5)
-    if not self.prob.driver.fail:
+    if not prob.driver.fail:
         y[0] = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))[0] #mass
         y[1] = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))[1] #max stress
         y[2] = copy.deepcopy(prob.get_val("test.aero_post.d_def"))
-        y[3] = copy.deepcopy(prob.get_val("test.struct_post.dv_def"))
-        y[4] = copy.deepcopy(prob.get_val("test.struct_post.dp_def"))
+        y[3] = copy.deepcopy(prob.get_val("test.aero_post.dv_def"))
+        y[4] = copy.deepcopy(prob.get_val("test.aero_post.dp_def"))
     else:
         y[0] = np.nan
         y[1] = np.nan
