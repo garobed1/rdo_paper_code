@@ -7,6 +7,7 @@ from mpi4py import MPI
 import pickle
 import openmdao.api as om
 import numpy as np
+import copy
 
 import mphys_comp.impinge_setup as default_impinge_setup
 from mphys_comp.impinge_analysis import Top
