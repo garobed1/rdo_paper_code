@@ -4,6 +4,7 @@ from scipy.sparse.linalg.dsolve.linsolve import spsolve_triangular
 from beam.hermite_basis import cubicHermite, cubicHermiteD, cubicHermiteD2
 import beam.assembly as asm
 from beam.utils import Error
+from beam.om_beamdvs import beamDVComp
 import copy
 
 """
@@ -237,7 +238,6 @@ class EulerBeamSolver():
         dx = self.L/self.Nelem 
         for i in range(self.Nelem):
             mass += 0.5*(self.th[i]+self.th[i+1])*dx
-
         return mass
 
     def evalthSens(self, func):

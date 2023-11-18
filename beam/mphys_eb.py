@@ -4,6 +4,11 @@ import openmdao.api as om
 from mphys.builder import Builder
 from beam.beam_solver import EulerBeamSolver
 from scipy.sparse.linalg.dsolve import spsolve
+from mphys import Multipoint
+from mphys.scenario_structural import ScenarioStructural
+import mphys_comp.impinge_setup as default_impinge_setup
+
+from beam.om_beamdvs import beamDVComp
 
 """
 Wrapper for the beam solver, incorporating as a structural solver in mphys
@@ -83,12 +88,12 @@ class EBSolver(om.ImplicitComponent):
         state_size = len(self.ans)
         # inputs
         self.add_input('dv_struct', distributed=False, shape=self.ndv, desc='tacs design variables', tags=['mphys_input'])
-        self.add_input('x_struct0', distributed=False, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
-        self.add_input('struct_force',  distributed=False, val=np.ones(self.npnt), desc='structural load vector', tags=['mphys_coupling'])
+        self.add_input('x_struct0', distributed=True, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
+        self.add_input('struct_force',  distributed=True, val=np.ones(self.npnt), desc='structural load vector', tags=['mphys_coupling'])
 
         # outputs
         # its important that we set this to zero since this displacement value is used for the first iteration of the aero
-        self.add_output('struct_states', distributed=False, shape=state_size, val = np.ones(state_size), desc='structural state vector', tags=['mphys_coupling'])
+        self.add_output('struct_states', distributed=True, shape=state_size, val = np.ones(state_size), desc='structural state vector', tags=['mphys_coupling'])
 
         # partials
         self.declare_partials('struct_states',['dv_struct','struct_force','struct_states'])
@@ -121,6 +126,7 @@ class EBSolver(om.ImplicitComponent):
         #if self._need_update(inputs):
             # update Iyy
         self.beam_solver.computeRectMoment(np.array(inputs['dv_struct']))
+        self.beam_solver.setThickness(inputs['dv_struct'])
             # have this function call setIyy internally
 
             # update force
@@ -430,7 +436,7 @@ class EBFunctions(om.ExplicitComponent):
         # TODO move the dv_struct to an external call where we add the DVs
         self.add_input('dv_struct', distributed=False, shape = self.ndv, desc='design variables', tags=['mphys_input'])
         self.add_input('x_struct0', distributed=True, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
-        self.add_input('struct_states', distributed=False, shape_by_conn=True, desc='structural state vector', tags=['mphys_coupling'])
+        self.add_input('struct_states', distributed=True, shape_by_conn=True, desc='structural state vector', tags=['mphys_coupling'])
 
         # Remove the mass function from the func list if it is there
         # since it is not dependent on the structural state
@@ -441,13 +447,15 @@ class EBFunctions(om.ExplicitComponent):
 
         self.func_list = func_no_mass
         if len(self.func_list) > 0:
-            self.add_output('func_struct', distributed=False, shape=len(self.func_list), desc='structural function values', tags=['mphys_result'])
+            self.add_output('func_struct', distributed=True, shape=len(self.func_list), desc='structural function values', tags=['mphys_result'])
             # declare the partials
             self.declare_partials('func_struct',['dv_struct','struct_states'])
 
     def _update_internal(self,inputs):
         # update Iyy
         self.beam_solver.computeRectMoment(np.array(inputs['dv_struct']))
+        self.beam_solver.setThickness(inputs['dv_struct'])
+        self.beam_solver.setLoad(np.array(inputs['struct_force']))
         # have this function call setIyy internally
 
     def compute(self,inputs,outputs):
@@ -500,6 +508,7 @@ class EBMass(om.ExplicitComponent):
     def _update_internal(self,inputs):
         # update Iyy
         self.beam_solver.computeRectMoment(np.array(inputs['dv_struct']))
+        self.beam_solver.setThickness(inputs['dv_struct'])
         # have this function call setIyy internally
 
         self.beam_solver.setLoad(np.array(inputs['struct_force']))
@@ -522,3 +531,116 @@ class EBMass(om.ExplicitComponent):
         partials['mass','dv_struct'] = list(self.beam_solver.evalthSens(['mass']).values())
 
 
+
+
+class Top(Multipoint):
+
+    def _declare_options(self):
+        self.options.declare('problem_settings', default=default_impinge_setup,
+                             desc='default settings for the shock impingement problem, including solver settings.')    
+
+
+    def setup(self):
+        self.impinge_setup = self.options["problem_settings"]
+        ################################################################################
+        # Euler Bernoulli Setup
+        ################################################################################
+        struct_options = self.impinge_setup.structOptions
+        struct_builder = EBBuilder(struct_options)
+        struct_builder.initialize(self.comm)
+        ndv_struct = struct_builder.get_ndv()
+
+        self.add_subsystem("mesh_struct", struct_builder.get_mesh_coordinate_subsystem())
+
+        ################################################################################
+        # MPHYS Setup
+        ################################################################################
+
+        # ivc to keep the top level DVs
+        dvs = self.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
+       
+        dvs.add_output("f_struct", struct_options["force"])
+        dvs.add_output("dv_struct_TRUE", struct_options["th_true"])
+
+        nonlinear_solver = om.NonlinearBlockGS(maxiter=2, iprint=2, use_aitken=True, rtol=1e-14, atol=1e-14)
+        linear_solver = om.LinearBlockGS(maxiter=25, iprint=2, use_aitken=True, rtol=1e-14, atol=1e-14)
+        scenario = "test"
+        self.mphys_add_scenario(
+            scenario,
+            ScenarioStructural(
+                struct_builder=struct_builder
+            ),
+            nonlinear_solver,
+            linear_solver,
+        )
+
+        # thickness interp subsys
+        self.add_subsystem("dv_interp", beamDVComp(ndv = struct_options["ndv_true"], method='bsplines'))
+
+        for discipline in ["struct"]:
+            self.mphys_connect_scenario_coordinate_source("mesh_%s" % discipline, scenario, discipline)
+
+        
+
+    def configure(self):
+        # create the aero problem 
+        impinge_setup = self.impinge_setup
+
+        self.connect("f_struct", f"test.f_struct")
+        # self.connect("dv_struct", f"test.dv_struct")
+        self.connect("dv_struct_TRUE", "dv_interp.DVS")
+        self.connect("dv_interp.th", "test.dv_struct")
+
+
+
+
+if __name__ == '__main__':
+
+    ################################################################################
+    # OpenMDAO setup
+    ################################################################################
+
+
+    nelem = 30
+    problem_settings = default_impinge_setup
+    problem_settings.nelem = nelem
+    ndv_true = problem_settings.ndv_true
+    problem_settings.structOptions["Nelem"] = nelem
+    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*1.0
+    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
+    prob = om.Problem()
+    prob.model = Top(problem_settings=problem_settings)
+    
+
+    prob.model.add_design_var("dv_struct_TRUE")
+    # prob.model.add_objective("test.struct_post.func_struct")
+    # prob.model.add_objective("test.struct_post.stresscon")
+
+    
+    prob.setup(mode='rev')
+    # om.n2(prob, show_browser=False, outfile="mphys_as_adflow_eb_%s_2pt.html")
+    #prob.set_val("mach", 2.)
+    prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.0005)
+    prob.run_model()
+    # f1 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
+    # prob.set_val("dv_struct", np.ones(nelem+1)*0.001)
+    # prob.run_model()
+    # f2 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
+    #prob.set_val("beta", 7.)
+    #x = np.linspace(2.5, 3.5, 10)
+
+
+    # import pdb; pdb.set_trace()
+    #prob.model.approx_totals()
+
+
+    # prob.check_totals(step_calc='rel_avg')
+
+    prob.check_partials()
+    # import pdb; pdb.set_trace()
+    #prob.model.list_outputs()
+
+    # if MPI.COMM_WORLD.rank == 0:
+    #     print("cd = %.15f" % prob["test.aero_post.cd_def"])
+    #     print(y)
+    #     prob.model.

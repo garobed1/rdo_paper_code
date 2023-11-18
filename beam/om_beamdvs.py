@@ -19,13 +19,13 @@ class beamDVComp(om.ExplicitComponent):
 
         # inputs
         self.add_input('DVS', shape=self.ndv,
-                                    distributed=True,
+                                    distributed=False,
                                     desc='beam thickness design variables, to be interpolated on the beam solver mesh',
                                     tags=['beam_dvs'])
 
         # outputs
         self.add_output('th', shape_by_conn=True,
-                                    distributed=True,
+                                    distributed=False,
                                     desc='beam thickness on the solver mesh',
                                     tags=['beam_dvs'])
 
@@ -34,7 +34,7 @@ class beamDVComp(om.ExplicitComponent):
 
         # actually set up the interpolation here
         x = np.linspace(0., 1.0, outsize)
-        self.interp = InterpND(method=self.method, num_cp=self.ndv, x_interp=x, delta_x=0.1)
+        self.interp = InterpND(method=self.method, num_cp=self.ndv, x_interp=x)#, delta_x=0.1)
 
         self.declare_partials('th','DVS')
 

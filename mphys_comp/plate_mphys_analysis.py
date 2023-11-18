@@ -161,7 +161,7 @@ model = prob.model
 prob.setup()
 om.n2(prob, show_browser=False, outfile="mphys_as_adflow_tacs_%s_2pt.html" % args.xfer)
 prob.run_model()
-
+prob.check_totals(step_calc='rel_avg')
 prob.model.list_outputs()
 
 if MPI.COMM_WORLD.rank == 0:

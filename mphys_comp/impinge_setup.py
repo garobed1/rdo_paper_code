@@ -120,9 +120,12 @@ aeroOptions = { #ADflow aero solver options
 
 # Euler Bernoulli Structural Solver Options
 nelem = 60
+ndv_true = 15
 structOptions = {
     "name":probName,
     "Nelem":nelem,
+    "ndv_true":ndv_true,
+    "th_true":np.ones(ndv_true)*0.0005,
     "L":0.254, #0.254, 
     "E":69000000000,
     "force":np.ones(nelem+1)*1.0,
