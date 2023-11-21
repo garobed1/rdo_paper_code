@@ -128,9 +128,9 @@ class Top(Multipoint):
             # dvs.add_output("r1", val=impinge_setup.rho)
 
         if(self.options["use_inflow_comp"]):
-            dvs.add_output("M0", 3.0)
-            dvs.add_output('P0', 2919.0)
-            dvs.add_output('T0', 217.0)
+            dvs.add_output("M0", impinge_setup.M0)
+            dvs.add_output('P0', impinge_setup.P0)
+            dvs.add_output('T0', impinge_setup.T0)
             self.add_subsystem("upstream", InflowComp())
         else:
             dvs.add_output("vx0", impinge_setup.VX)
@@ -239,21 +239,21 @@ class Top(Multipoint):
 
                 if not self.options["subsonic"]:
                     self.connect("upstream.VelocityX", "test.coupling.aero.velocityx0")
-                self.connect("upstream.Density", "test.coupling.aero.density0")
-                self.connect("upstream.Pressure", "test.coupling.aero.pressure0")
+                    self.connect("upstream.Density", "test.coupling.aero.density0")
+                    self.connect("upstream.Pressure", "test.coupling.aero.pressure0")
                 if not self.options["subsonic"]:
                     self.connect("upstream.VelocityX", "test.aero_post.velocityx0")
-                self.connect("upstream.Density", "test.aero_post.density0")
-                self.connect("upstream.Pressure", "test.aero_post.pressure0")
+                    self.connect("upstream.Density", "test.aero_post.density0")
+                    self.connect("upstream.Pressure", "test.aero_post.pressure0")
             else:
                 if not self.options["subsonic"]:
                     self.connect("vx0", "test.coupling.aero.velocityx0")
-                self.connect("r0", "test.coupling.aero.density0")
-                self.connect("P0", "test.coupling.aero.pressure0")
+                    self.connect("r0", "test.coupling.aero.density0")
+                    self.connect("P0", "test.coupling.aero.pressure0")
                 if not self.options["subsonic"]:
                     self.connect("vx0", "test.aero_post.velocityx0")
-                self.connect("r0", "test.aero_post.density0")
-                self.connect("P0", "test.aero_post.pressure0")
+                    self.connect("r0", "test.aero_post.density0")
+                    self.connect("P0", "test.aero_post.pressure0")
         
 
 
