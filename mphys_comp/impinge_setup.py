@@ -133,7 +133,7 @@ structOptions = {
     "th":np.ones(nelem+1)*0.0005,
     "l_bound":2.0,
     "smax": 500,
-    "get_funcs":["mass", "stresscon"]
+    "get_funcs":["mass", "stress", "stresscon"]
     }
 
 warpOptions = { #IDwarp mesh movement options

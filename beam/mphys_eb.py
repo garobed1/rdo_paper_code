@@ -159,7 +159,7 @@ class EBSolver(om.ImplicitComponent):
         partials['struct_states','struct_states'] = copy.deepcopy(self.beam_solver.A.real.todense())
 
         #ans  = self.beam_solver()
-        dAudth, dbdf = self.beam_solver.evalassembleSens()
+        dAudth, dbdf = self.beam_solver.evalAssembleSens()
         partials['struct_states','struct_force'] = dbdf
         partials['struct_states','dv_struct'] = dAudth
         #import pdb; pdb.set_trace()
@@ -218,12 +218,17 @@ class EBFuncsGroup(om.Group):
     def setup(self):
         self.struct_objects = self.options['solver_objects']
         self.check_partials = self.options['check_partials']
+        self.func_list = self.struct_objects[0]['get_funcs']
+        func_no_mass = []
+        for func in self.func_list:
+            if func not in ['mass']:
+                func_no_mass.append(func)
 
         self.add_subsystem('funcs', EBFunctions(
             struct_objects=self.struct_objects,
             check_partials=self.check_partials),
             promotes_inputs=['x_struct0', 'struct_states','dv_struct'],
-            promotes_outputs=['func_struct']
+            promotes_outputs=func_no_mass
         )
 
         self.add_subsystem('mass', EBMass(
@@ -442,38 +447,42 @@ class EBFunctions(om.ExplicitComponent):
         # since it is not dependent on the structural state
         func_no_mass = []
         for func in self.func_list:
-            if func not in ['beam_mass']:
+            if func not in ['mass']:
                 func_no_mass.append(func)
 
         self.func_list = func_no_mass
-        if len(self.func_list) > 0:
-            self.add_output('func_struct', distributed=True, shape=len(self.func_list), desc='structural function values', tags=['mphys_result'])
+        for item in self.func_list:
+            if item == 'stress':
+                ishape = self.beam_solver.Nelem + 1
+            else:
+                ishape = 1
+            self.add_output(item, distributed=True, shape=ishape, tags=['mphys_result'])
             # declare the partials
-            self.declare_partials('func_struct',['dv_struct','struct_states'])
+            self.declare_partials(item,['dv_struct','struct_states'])
 
     def _update_internal(self,inputs):
         # update Iyy
         self.beam_solver.computeRectMoment(np.array(inputs['dv_struct']))
         self.beam_solver.setThickness(inputs['dv_struct'])
-        self.beam_solver.setLoad(np.array(inputs['struct_force']))
+        self.beam_solver.setStates(inputs['struct_states'])
         # have this function call setIyy internally
 
     def compute(self,inputs,outputs):
-        if self.check_partials:
-            self._update_internal(inputs)
+        self._update_internal(inputs)
 
-        if 'func_struct' in outputs:
-            thing = list(self.beam_solver.evalFunctions(self.func_list).values())
-            outputs['func_struct'] = thing
+        thing = self.beam_solver.evalFunctions(self.func_list)
+        for item in self.func_list:
+            outputs[item] = thing[item]
 
     def compute_partials(self, inputs, partials):
-        if self.check_partials:
-            self._update_internal(inputs)
+        self._update_internal(inputs)
 
         self.beam_solver.evalFunctions(self.func_list)
-        
-        partials['func_struct','dv_struct'] = list(self.beam_solver.evalthSens(self.func_list).values())
-        partials['func_struct','struct_states'] = list(self.beam_solver.evalstateSens(self.func_list).values())
+        thingth = self.beam_solver.evalFuncThSens(self.func_list)
+        thingst = self.beam_solver.evalFuncStateSens(self.func_list)
+        for item in self.func_list:
+            partials[item,'dv_struct'] = thingth[item]
+            partials[item,'struct_states'] = thingst[item]
 
 
 class EBMass(om.ExplicitComponent):
@@ -511,11 +520,9 @@ class EBMass(om.ExplicitComponent):
         self.beam_solver.setThickness(inputs['dv_struct'])
         # have this function call setIyy internally
 
-        self.beam_solver.setLoad(np.array(inputs['struct_force']))
 
     def compute(self,inputs,outputs):
-        if self.check_partials:
-            self._update_internal(inputs)
+        self._update_internal(inputs)
 
         if 'mass' in outputs:
             thing = self.beam_solver.evalFunctions(['mass'])['mass']
@@ -527,8 +534,8 @@ class EBMass(om.ExplicitComponent):
             self._update_internal(inputs)
 
         self.beam_solver.evalFunctions(['mass'])['mass']
-        
-        partials['mass','dv_struct'] = list(self.beam_solver.evalthSens(['mass']).values())
+        dm_ddv = self.beam_solver.evalMassThSens()
+        partials['mass','dv_struct'] = dm_ddv#list(self.beam_solver.evalthSens(['mass']).values())
 
 
 
@@ -606,8 +613,9 @@ if __name__ == '__main__':
     problem_settings.nelem = nelem
     ndv_true = problem_settings.ndv_true
     problem_settings.structOptions["Nelem"] = nelem
-    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*1.0
+    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*10000.0
     problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
+    problem_settings.structOptions['smax'] = 5.0
     prob = om.Problem()
     prob.model = Top(problem_settings=problem_settings)
     
@@ -636,7 +644,7 @@ if __name__ == '__main__':
 
     # prob.check_totals(step_calc='rel_avg')
 
-    prob.check_partials()
+    prob.check_partials(step_calc = 'rel_avg', minimum_step = 1e-15) # settings are important since displacements are so small
     # import pdb; pdb.set_trace()
     #prob.model.list_outputs()
 

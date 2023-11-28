@@ -234,7 +234,7 @@ if __name__ == '__main__':
     # OpenMDAO setup
     ################################################################################
 
-    use_shock = True
+    use_shock = False
     use_inflow = True
     full_far = False
     subsonic = False
@@ -242,12 +242,12 @@ if __name__ == '__main__':
     problem_settings = default_impinge_setup
     # problem_settings.aeroOptions['equationType'] = 'laminar NS'
     # problem_settings.aeroOptions['equationType'] = 'Euler'
-    problem_settings.aeroOptions['NKSwitchTol'] = 1e-6 #1e-6
+    problem_settings.aeroOptions['NKSwitchTol'] = 1e-4 #1e-6 # 2709, 1e-4 # 1784 for long 217 mesh
     # problem_settings.aeroOptions['NKSwitchTol'] = 1e-3 #1e-6
     problem_settings.aeroOptions['nCycles'] = 5000000
 
-    problem_settings.aeroOptions['L2Convergence'] = 1e-15
-    problem_settings.aeroOptions['printIterations'] = False
+    problem_settings.aeroOptions['L2Convergence'] = 1e-12
+    problem_settings.aeroOptions['printIterations'] = True
     problem_settings.aeroOptions['printTiming'] = True
 
     problem_settings.mach = 2.7
@@ -256,12 +256,18 @@ if __name__ == '__main__':
 
     if full_far:
         aeroGridFile = f'../meshes/imp_TEST_73_73_25.cgns'
+        nelem = 30
     elif subsonic:
         aeroGridFile = f'../meshes/imp_subs_73_73_25.cgns'
+        nelem = 30
     else:
-        aeroGridFile = f'../meshes/imp_mphys_73_73_25.cgns'
+        # aeroGridFile = f'../meshes/imp_mphys_73_73_25.cgns'
+        # nelem = 30
+        aeroGridFile = f'../meshes/imp_long_217_217_25.cgns'
+        nelem = 117
     problem_settings.aeroOptions['gridFile'] = aeroGridFile
-
+    problem_settings.nelem = nelem
+    problem_settings.structOptions['Nelem'] = nelem
 
     prob = om.Problem()
     prob.model = Top(problem_settings=problem_settings, subsonic=subsonic,
@@ -269,20 +275,20 @@ if __name__ == '__main__':
                                                          use_inflow_comp=use_inflow, 
                                                          full_free=full_far)
 
-    # prob.model.add_design_var("M1")
+    prob.model.add_design_var("M1")
     # prob.model.add_design_var("beta")
-    # prob.model.add_design_var("P1")
-    # prob.model.add_design_var("T1")
+    prob.model.add_design_var("P1")
+    prob.model.add_design_var("T1")
     # prob.model.add_design_var("r1")
 
-    # prob.model.add_design_var("P0")
-    # prob.model.add_design_var("M0")
-    # prob.model.add_design_var("T0")
+    prob.model.add_design_var("P0")
+    prob.model.add_design_var("M0")
+    prob.model.add_design_var("T0")
     # prob.model.add_design_var("vx0")
     # prob.model.add_design_var("r0")
     # prob.model.add_design_var("P0")
 
-    prob.model.add_design_var("shock_angle")
+    # prob.model.add_design_var("shock_angle")
 
     # prob.model.add_objective("test.aero_post.cd_def")
     # prob.model.add_objective("test.aero_post.cdv_def")

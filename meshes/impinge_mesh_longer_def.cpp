@@ -4,7 +4,7 @@ Create
 
 compilation:
 
-g++ impinge_mesh_def.cpp -L $CGNS_HOME/lib -lcgns -I $CGNS_HOME/include -o impinge_mesh_def
+g++ impinge_mesh_longer_def.cpp -L $CGNS_HOME/lib -lcgns -I $CGNS_HOME/include -o impinge_mesh_longer_def
 
 
 */
@@ -118,8 +118,8 @@ int main(int argc, char *argv[])
 //x direction, 3 sections, middle section even
    double fr[4] = {
       1./12.,
-      5./12.,
-      10./12.,
+      4./12.,
+      21./24., // 13/24 of elements are beam (117 for 216 elements)
       23./24.};
    // double off1 = 3.*lX/(ni); 
    double offm = lX/((fr[2]-fr[1])*ni);
@@ -391,9 +391,9 @@ int main(int argc, char *argv[])
 double xDistFunc(int ind, int imax, double lX, double xs, double del, double *fr)
 {
    // just do three sections
-   double lXtot = 2.85;
-   double lXall = 2.5;
-   double lXbum = 0.254; // in centimeters
+   double lXtot = 3.35;
+   double lXall = 3.0;
+   double lXbum = 0.75; // in centimeters
    double lXpre1 = 1.0;
    double lXpre2 = 1.0;
    double lXpos = lXall-lXbum-lXpre2-lXpre1;
@@ -521,7 +521,7 @@ void impinging_shock(double a_shock, double M0, double P0, double r0, double T0,
    double work;
 
    //determine lZ that puts shock in top left corner
-   lZ = (2. + (0.254/2.))*tan(s);
+   lZ = (2. + (0.75/2.))*tan(s);
 
    //determine flow angle
    work = (gam + 1)*M0*M0/(2*(M0*M0*ss*ss - 1)) - 1;

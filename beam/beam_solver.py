@@ -162,6 +162,12 @@ class EulerBeamSolver():
         self.req_update = True
         self.req_solve = True
 
+    def setStates(self, u):
+
+        self.u = u
+        self.req_update = True
+        self.req_solve = True
+
     def computeRectMoment(self, th):
 
         # Compute moment of an (infinitely) rectangular beam, given thickness
@@ -185,45 +191,115 @@ class EulerBeamSolver():
 
         return pts
 
+    def evalStress(self):
+        dx = self.L/self.Nelem 
+        sigma = np.zeros(self.Nelem+1, dtype='complex_')
+        zero = np.array([0])
+        utrue = np.concatenate((zero,zero,self.u,zero,zero))
+        for i in range(self.Nelem):
+            xi = [-1,1]
+            d2Nl = cubicHermiteD2(xi[0], dx)
+            d2Nr = cubicHermiteD2(xi[1], dx)
+            sigma[i] += 0.5*self.E*self.th[i]*np.dot(d2Nl,utrue[i*2:(i+1)*2+2])
+            sigma[i+1] += 0.5*self.E*self.th[i+1]*np.dot(d2Nr,utrue[i*2:(i+1)*2+2])
+
+
+        return sigma
+    
+    def evalStressStateSens(self):
+        dx = self.L/self.Nelem 
+        zero = np.array([0])
+        utrue = np.concatenate((zero,zero,self.u,zero,zero))
+        dsigma = np.zeros([self.Nelem+1,utrue.size])
+        for i in range(self.Nelem):
+            xi = [-1,1]
+            d2Nl = cubicHermiteD2(xi[0], dx)
+            d2Nr = cubicHermiteD2(xi[1], dx)
+            # sigma[i] += 0.5*self.E*self.th[i]*np.dot(d2Nl,utrue[i*2:(i+1)*2+2])
+            # sigma[i+1] += 0.5*self.E*self.th[i+1]*np.dot(d2Nr,utrue[i*2:(i+1)*2+2])
+            dsigma[i,i*2:(i+1)*2+2] += 0.5*self.E*self.th[i]*d2Nl
+            dsigma[i+1,i*2:(i+1)*2+2] += 0.5*self.E*self.th[i+1]*d2Nr
+
+        dsigma = dsigma[:, 2:-2]
+        return dsigma
+    
+    def evalStressThSens(self):
+        dx = self.L/self.Nelem 
+        sigma = np.zeros(self.Nelem+1, dtype='complex_')
+        dsigma = np.zeros([self.Nelem+1,self.th.size])
+        zero = np.array([0])
+        utrue = np.concatenate((zero,zero,self.u,zero,zero))
+        for i in range(self.Nelem):
+            xi = [-1,1]
+            d2Nl = cubicHermiteD2(xi[0], dx)
+            d2Nr = cubicHermiteD2(xi[1], dx)
+            # sigma[i] += 0.5*self.E*self.th[i]*np.dot(d2Nl,utrue[i*2:(i+1)*2+2])
+            # sigma[i+1] += 0.5*self.E*self.th[i+1]*np.dot(d2Nr,utrue[i*2:(i+1)*2+2])
+            dsigma[i,i] += 0.5*self.E*np.dot(d2Nl,utrue[i*2:(i+1)*2+2])
+            dsigma[i+1,i+1] += 0.5*self.E*np.dot(d2Nr,utrue[i*2:(i+1)*2+2])
+
+        return dsigma
+    
+    def evalStressMax(self, sigma=None):
+        # aggregate, Martins 2005, Kreisselmeier-Steinhauser
+        #sigma = sum(abs(sigma))
+        #sigma = sigma[-1]
+        sm = self.smax
+        if sigma is None:
+            sigma = self.evalStress()
+        sigma_a = abs(sigma)
+        rho = 5
+        s2 = sigma_a*sigma_a
+        sm2 = sm*sm
+        g = s2 - sm2
+        gm = max(g)
+        esum = 0
+        for i in range(self.Nelem+1):
+            esum += np.exp(rho*(g[i] - gm))
+        KS = gm + (1./rho)*np.log(esum)
+        return KS
+    
+    def evalStressMaxSens(self, sigma=None):
+        # aggregate, Martins 2005, Kreisselmeier-Steinhauser
+        #sigma = sum(abs(sigma))
+        #sigma = sigma[-1]
+        sm = self.smax
+        if sigma is None:
+            sigma = self.evalStress()
+        sigma_a = abs(sigma)
+        dsigma_a = np.sign(sigma)
+        rho = 5
+        s2 = sigma_a*sigma_a
+        ds2 = 2*sigma_a
+        sm2 = sm*sm
+        g = s2 - sm2
+        dg = ds2
+        gm = max(g)
+        esum = 0
+        desum = np.zeros(self.Nelem+1)
+        for i in range(self.Nelem+1):
+            esum += np.exp(rho*(g[i] - gm))
+            desum[i] = rho*dg[i]*np.exp(rho*(g[i] - gm))
+        # KS = gm + (1./rho)*np.log(esum)
+        dKS = (1./rho)*(1./esum)*desum*dsigma_a
+        return dKS
+
     def evalFunctions(self, func_list):
 
         # compute all functions
 
         # element-wise stress, don't compute if we only want mass
         #if(not all((func_list, ["mass"]))):
-        sm = self.smax
-        if("stress" in func_list or "stresscon" in func_list):
-            dx = self.L/self.Nelem 
-            sigma = np.zeros(self.Nelem+1, dtype='complex_')
-            g = np.zeros(self.Nelem+1, dtype='complex_')
-            zero = np.array([0])
-            utrue = np.concatenate((zero,zero,self.u,zero,zero))
-            for i in range(self.Nelem):
-                xi = [-1,1]
-                d2Nl = cubicHermiteD2(xi[0], dx)
-                d2Nr = cubicHermiteD2(xi[1], dx)
-                sigma[i] += 0.5*self.E*self.th[i]*np.dot(d2Nl,utrue[i*2:(i+1)*2+2])
-                sigma[i+1] += 0.5*self.E*self.th[i+1]*np.dot(d2Nr,utrue[i*2:(i+1)*2+2])
-
-            # aggregate, Martins 2005, Kreisselmeier-Steinhauser
-            #sigma = sum(abs(sigma))
-            #sigma = sigma[-1]
-            rho = 5
-            s2 = sigma*sigma
-            sm2 = sm*sm
-            g = s2 - sm2
-            gm = max(g)
-            esum = 0
-            for i in range(self.Nelem+1):
-                esum += np.exp(rho*(g[i] - gm))
-            KS = gm + (1./rho)*np.log(esum)
-        # mass
-        mass = self.evalMass()
         
-        dict = {}
+        if "stress" in func_list or "stresscon" in func_list:
+            sigma = self.evalStress()
+        if "stresscon" in func_list:
+            KS = self.evalStressMax(sigma)
 
+        dict = {}
         for key in func_list:
             if(key == "mass"):
+                mass = self.evalMass()
                 dict["mass"] = mass
             if(key == "stress"):
                 dict["stress"] = sigma
@@ -239,40 +315,126 @@ class EulerBeamSolver():
         for i in range(self.Nelem):
             mass += 0.5*(self.th[i]+self.th[i+1])*dx
         return mass
+    
+    def evalMassStateSens(self):
 
-    def evalthSens(self, func):
+        # mass = 0
+        dmass = np.zeros_like(self.u)
+        return dmass
+    
+    def evalMassThSens(self):
+
+        # mass = 0
+        dmass = np.zeros_like(self.th)
+        dx = self.L/self.Nelem 
+        for i in range(self.Nelem):
+            # mass += 0.5*(self.th[i]+self.th[i+1])*dx
+            dmass[i] += 0.5*dx
+            dmass[i+1] += 0.5*dx
+        return dmass
+
+    def evalFuncThSens(self, func):
 
         # complex step
-        h = 1e-10
+        # h = 1e-10
 
-        gdict = {} 
+        # gdict = {} 
 
+        # for key in func:
+        #     if(key == "stress"):
+        #         continue
+        #     else:
+        #         gdict[key] = np.zeros(len(self.th))
+        
+        # thc = np.zeros(len(self.th), dtype='complex_')
+        # for i in range(len(self.th)):
+        #     thc.real = self.th
+        #     thc.imag = np.zeros(len(self.th))
+        #     thc[i] = thc[i] + h*1j
+        #     self.setThickness(thc)
+        #     self.__call__()
+        #     sol = self.evalFunctions(func)
+
+        #     for key in func:
+        #         if(key == "stress"):
+        #             continue
+        #         else:
+        #             gdict[key][i] = np.imag(sol[key])/h
+        
+        # # reset
+        # self.setThickness(self.th)
+
+        if "stress" in func or "stresscon" in func:
+            dsigma = self.evalStressThSens()
+        if "stresscon" in func:
+            sigma = self.evalStress()
+            dKS = self.evalStressMaxSens(sigma)
+
+        gdict = {}
         for key in func:
+            if(key == "mass"):
+                dmass = self.evalMassThSens()
+                gdict["mass"] = dmass
             if(key == "stress"):
-                continue
-            else:
-                gdict[key] = np.zeros(len(self.th))
-        
-        thc = np.zeros(len(self.th), dtype='complex_')
-        for i in range(len(self.th)):
-            thc.real = self.th
-            thc.imag = np.zeros(len(self.th))
-            thc[i] = thc[i] + h*1j
-            self.setThickness(thc)
-            self.__call__()
-            sol = self.evalFunctions(func)
-
-            for key in func:
-                if(key == "stress"):
-                    continue
-                else:
-                    gdict[key][i] = np.imag(sol[key])/h
-        
-        # reset
-        self.setThickness(self.th)
+                gdict["stress"] = dsigma
+            if(key == "stresscon"):
+                gdict["stresscon"] = dsigma.T@dKS
         return gdict
 
-    def evalforceSens(self, func):
+
+    def evalFuncStateSens(self, func):
+
+        # # complex step
+        # h = 1e-10
+
+        # gdict = {} 
+
+        # # make sure to keep the current state
+        # ucurrent = copy.deepcopy(self.u)
+
+        # for key in func:
+        #     if(key == "stress"):
+        #         continue
+        #     else:
+        #         gdict[key] = np.zeros(len(self.u))
+        
+        # uc = np.zeros(len(self.u), dtype='complex_')
+        # for i in range(len(self.u)):
+        #     uc.real = self.u
+        #     uc.imag = np.zeros(len(self.u))
+        #     uc[i] = uc[i] + h*1j
+        #     #no need to call
+        #     self.u = uc
+        #     sol = self.evalFunctions(func)
+
+        #     for key in func:
+        #         if(key == "stress"):
+        #             continue
+        #         else:
+        #             gdict[key][i] = np.imag(sol[key])/h
+            
+        # # reset
+        # self.u = ucurrent
+
+        if "stress" in func or "stresscon" in func:
+            dsigma = self.evalStressStateSens()
+        if "stresscon" in func:
+            sigma = self.evalStress()
+            dKS = self.evalStressMaxSens(sigma)
+
+        gdict = {}
+        for key in func:
+            if(key == "mass"):
+                dmass = self.evalMassStateSens()
+                gdict["mass"] = dmass
+            if(key == "stress"):
+                gdict["stress"] = dsigma
+            if(key == "stresscon"):
+                gdict["stresscon"] = dsigma.T@dKS
+
+        return gdict
+
+    def evalForceStateSens(self, func):
 
         # complex step
         h = 1e-10
@@ -304,42 +466,8 @@ class EulerBeamSolver():
         self.setLoad(self.force)
         return gdict
 
-    def evalstateSens(self, func):
 
-        # complex step
-        h = 1e-10
-
-        gdict = {} 
-
-        # make sure to keep the current state
-        ucurrent = copy.deepcopy(self.u)
-
-        for key in func:
-            if(key == "stress"):
-                continue
-            else:
-                gdict[key] = np.zeros(len(self.u))
-        
-        uc = np.zeros(len(self.u), dtype='complex_')
-        for i in range(len(self.u)):
-            uc.real = self.u
-            uc.imag = np.zeros(len(self.u))
-            uc[i] = uc[i] + h*1j
-            #no need to call
-            self.u = uc
-            sol = self.evalFunctions(func)
-
-            for key in func:
-                if(key == "stress"):
-                    continue
-                else:
-                    gdict[key][i] = np.imag(sol[key])/h
-            
-        # reset
-        self.u = ucurrent
-        return gdict
-
-    def evalassembleSens(self):
+    def evalAssembleSens(self):
 
         # complex step
         h = 1e-10
@@ -402,7 +530,7 @@ settings = {
 # beamsolve = EulerBeamSolver(settings)
 # beamsolve()
 
-# da, db = beamsolve.evalassembleSens()
+# da, db = beamsolve.evalAssembleSens()
 # import pdb; pdb.set_trace()
 #func_list = ["mass","stress","stresscon"]
 
