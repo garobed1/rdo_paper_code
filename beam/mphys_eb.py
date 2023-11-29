@@ -460,6 +460,22 @@ class EBFunctions(om.ExplicitComponent):
             # declare the partials
             self.declare_partials(item,['dv_struct','struct_states'])
 
+    def setup_outs(self):
+        self.func_list = self.struct_objects[0]['get_funcs']
+        func_no_mass = []
+        for func in self.func_list:
+            if func not in ['mass']:
+                func_no_mass.append(func)
+
+        self.func_list = func_no_mass
+        for item in self.func_list:
+            if item == 'stress':
+                ishape = self.beam_solver.Nelem + 1
+            else:
+                ishape = 1
+            self.add_output(item, distributed=True, shape=ishape, tags=['mphys_result'])
+            # declare the partials
+            self.declare_partials(item,['dv_struct','struct_states'])
     def _update_internal(self,inputs):
         # update Iyy
         self.beam_solver.computeRectMoment(np.array(inputs['dv_struct']))

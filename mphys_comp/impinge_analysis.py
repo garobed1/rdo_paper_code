@@ -137,9 +137,15 @@ class Top(Multipoint):
             dvs.add_output('P0', impinge_setup.P0)
             dvs.add_output('r0', impinge_setup.r0)
 
+        
+
         #dvs.add_output("beta", impinge_setup.beta)
         dvs.add_output("dv_struct_TRUE", struct_options["th_true"])
         dvs.add_output("rsak", aero_options["SAConsts"][0])
+
+        dvs.add_output("mass")
+        dvs.add_output("stresscon")
+
         self.add_subsystem("dv_interp", beamDVComp(ndv = struct_options["ndv_true"], method='bsplines'))
 
 
@@ -203,10 +209,19 @@ class Top(Multipoint):
 
         self.test.coupling.aero.mphys_set_ap(ap)
         self.test.aero_post.mphys_set_ap(ap)
+        # self.test.struct_post.funcs.setup_outs()
 
         self.connect("rsak", "test.coupling.aero.rsak")
         self.connect("dv_struct_TRUE", "dv_interp.DVS")
         self.connect("dv_interp.th", "test.dv_struct")
+        # ### NOTE TODO ALERT TODO NOTE ### THIS IS MESSED UP
+        # WHAT DO YOU MEAN THEY DONT EXIST
+        # self.connect("mass","test.coupling.struct.mass")
+        # self.connect("stresscon","test.coupling.struct.stresscon")
+        # import pdb; pdb.set_trace()
+        # self.connect("mass","test.aero_post.d_def")
+        # self.connect("mass","test.struct_post.mass.mass")
+        # self.connect("stresscon","test.struct_post.funcs.stresscon")
 
         if(self.options["use_shock_comp"]):
             self.connect("shock_angle", "shock.shock_angle")
@@ -255,7 +270,7 @@ class Top(Multipoint):
                     self.connect("r0", "test.aero_post.density0")
                     self.connect("P0", "test.aero_post.pressure0")
         
-
+        
 
 # use as scratch space for playing around
 if __name__ == '__main__':

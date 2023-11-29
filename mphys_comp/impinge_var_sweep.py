@@ -19,8 +19,9 @@ size = comm.Get_size()
 args = sys.argv[1:]
 
 Ncase = 500
+ndv = 4
 problem_settings = default_impinge_setup
-problem_settings.ndv_true = 4
+problem_settings.ndv_true = ndv
 inputs_s = "dv_struct_TRUE"
 inputs_f = {"M0": 1.5,
             "shock_angle": 25.}
@@ -52,6 +53,7 @@ if inputs_s == "shock_angle":
     xlimits[:,1] = 28.
 
 problem_settings = default_impinge_setup
+problem_settings.aeroOptions['NKSwitchTol'] = 1e-4 #1e-6
 problem_settings.aeroOptions['L2Convergence'] = 1e-12
 problem_settings.aeroOptions['printIterations'] = False
 problem_settings.aeroOptions['printTiming'] = False
@@ -71,6 +73,9 @@ nelem = 117
 problem_settings.nelem = nelem
 problem_settings.structOptions['Nelem'] = nelem
 problem_settings.structOptions['force'] = np.ones(nelem+1)*1.0
+problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
+problem_settings.structOptions["ndv_true"] = ndv
+problem_settings.structOptions["th_true"] = np.ones(ndv)*0.0005
 
 if "dv_struct_TRUE" in inputs_f:
     problem_settings.structOptions["th"] = np.ones(nelem+1)*inputs_f["dv_struct_TRUE"]
@@ -79,7 +84,8 @@ if "shock_angle" in inputs_f:
 if "M0" in inputs_f:
     problem_settings.M0 = inputs_f["M0"]
 
-
+# home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+home = '/home/garobed/'
 
 sampling = Random(xlimits=xlimits)
 
@@ -119,9 +125,11 @@ for i in cases[rank]:
     prob.set_val(inputs_s, x[i])
     prob.run_model()
     y = np.zeros(5)
+    sig = None
     if not prob.driver.fail:
-        y[0] = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))[0] #mass
-        y[1] = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))[1] #max stress
+        y[0] = copy.deepcopy(prob.get_val("test.struct_post.mass")) #mass
+        y[1] = copy.deepcopy(max(abs(prob.get_val("test.struct_post.stress")))) #max stress
+        sig =  copy.deepcopy(prob.get_val("test.struct_post.stress"))
         y[2] = copy.deepcopy(prob.get_val("test.aero_post.d_def"))
         y[3] = copy.deepcopy(prob.get_val("test.aero_post.dv_def"))
         y[4] = copy.deepcopy(prob.get_val("test.aero_post.dp_def"))
@@ -131,8 +139,11 @@ for i in cases[rank]:
         y[2] = np.nan
         y[3] = np.nan
         y[4] = np.nan
+        sig = np.nan
 
     with open(f'./{title}/x_{i}.npy', 'wb') as f:
         pickle.dump(x[i], f)
     with open(f'./{title}/y_{i}.npy', 'wb') as f:
         pickle.dump(y, f)
+    with open(f'./{title}/s_{i}.npy', 'wb') as f:
+        pickle.dump(sig, f)

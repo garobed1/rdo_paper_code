@@ -246,6 +246,7 @@ if __name__ == '__main__':
     # problem_settings.aeroOptions['NKSwitchTol'] = 1e-3 #1e-6
     problem_settings.aeroOptions['nCycles'] = 5000000
 
+    
     problem_settings.aeroOptions['L2Convergence'] = 1e-12
     problem_settings.aeroOptions['printIterations'] = True
     problem_settings.aeroOptions['printTiming'] = True

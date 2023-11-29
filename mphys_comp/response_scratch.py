@@ -23,38 +23,40 @@ args = parser.parse_args()
 optdir = args.datadir
 
 inputs = ["shock_angle", "M0", "dv_struct_TRUE"]
-input_sweep = "shock_angle"
-
+dv_use = 0
+input_sweep = f"th_{dv_use}"
+input_sweep = f"th_avg"
 
 root = os.getcwd()
 # put data into arrays
-# i = 0
-# x_list = []
-# y_list = []
-# while 1:
-#     try:
-#         with open(f'/{root}/{optdir}/x_{i}.npy', 'rb') as f:
-#             x_cur = pickle.load(f)
-#         with open(f'/{root}/{optdir}/y_{i}.npy', 'rb') as f:
-#             y_cur = pickle.load(f)
-#         x_list.append(x_cur)
-#         y_list.append(y_cur)
-#         i += 1
-#     except:
-#         break
+i = 0
+x_list = []
+y_list = []
+while 1:
+    try:
+        with open(f'/{root}/{optdir}/x_{i}.npy', 'rb') as f:
+            x_cur = pickle.load(f)
+        with open(f'/{root}/{optdir}/y_{i}.npy', 'rb') as f:
+            y_cur = pickle.load(f)
+        x_list.append(x_cur)
+        y_list.append(y_cur)
+        i += 1
+    except:
+        break
 
-# x = np.array(x_list).T
-# y = np.array(y_list).T
+x = np.array(x_list).T
+y = np.array(y_list).T
 
-with open(f'/{root}/{optdir}/x_full.npy', 'rb') as f:
-    x = pickle.load(f)
-with open(f'/{root}/{optdir}/y_full.npy', 'rb') as f:
-    y = pickle.load(f)
-
+# with open(f'/{root}/{optdir}/x_full.npy', 'rb') as f:
+#     x = pickle.load(f)
+# with open(f'/{root}/{optdir}/y_full.npy', 'rb') as f:
+#     y = pickle.load(f)
+import pdb; pdb.set_trace()
 nind = x.shape[0]
+
 ynames = ['mass', 'maxstress', 'd_def', 'dv_def', 'dp_def']
 for i in range(y.shape[0]):
-    plt.scatter(x, y[i,:])
+    plt.scatter(np.mean(x[:,:], axis=0), y[i,:])
     plt.xlabel(input_sweep)
     plt.ylabel(ynames[i])
     plt.savefig(f'/{root}/{optdir}/sweep_{ynames[i]}.png', bbox_inches='tight')
