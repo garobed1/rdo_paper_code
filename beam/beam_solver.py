@@ -248,15 +248,20 @@ class EulerBeamSolver():
         if sigma is None:
             sigma = self.evalStress()
         sigma_a = abs(sigma)
-        rho = 5
-        s2 = sigma_a*sigma_a
-        sm2 = sm*sm
+        rho = 25
+        # s2 = sigma_a*sigma_a
+        s2 = sigma_a*sigma_a/(sm*sm)
+        # sm2 = sm*sm
+        sm2 = 1.
         g = s2 - sm2
         gm = max(g)
         esum = 0
         for i in range(self.Nelem+1):
             esum += np.exp(rho*(g[i] - gm))
+            # esum += np.exp(rho*(g[i]/gm - 1.))
         KS = gm + (1./rho)*np.log(esum)
+        # KS = 1. + (1./rho)*np.log(esum)
+        # import pdb; pdb.set_trace()
         return KS
     
     def evalStressMaxSens(self, sigma=None):
@@ -268,10 +273,13 @@ class EulerBeamSolver():
             sigma = self.evalStress()
         sigma_a = abs(sigma)
         dsigma_a = np.sign(sigma)
-        rho = 5
-        s2 = sigma_a*sigma_a
-        ds2 = 2*sigma_a
-        sm2 = sm*sm
+        rho = 25
+        # s2 = sigma_a*sigma_a
+        s2 = sigma_a*sigma_a/(sm*sm)
+        # ds2 = 2*sigma_a
+        ds2 = 2*sigma_a/(sm*sm)
+        # sm2 = sm*sm
+        sm2 = 1.
         g = s2 - sm2
         dg = ds2
         gm = max(g)
@@ -279,8 +287,11 @@ class EulerBeamSolver():
         desum = np.zeros(self.Nelem+1)
         for i in range(self.Nelem+1):
             esum += np.exp(rho*(g[i] - gm))
+            # esum += np.exp(rho*(g[i]/gm - 1.))
             desum[i] = rho*dg[i]*np.exp(rho*(g[i] - gm))
+            # desum[i] = rho*dg[i]*np.exp(rho*(g[i]/gm - 1.))/gm
         # KS = gm + (1./rho)*np.log(esum)
+        # KS = 1. + (1./rho)*np.log(esum)
         dKS = (1./rho)*(1./esum)*desum*dsigma_a
         return dKS
 

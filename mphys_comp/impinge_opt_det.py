@@ -30,8 +30,9 @@ import mphys_comp.impinge_setup as default_impinge_setup
 
 # set these for convenience
 comm = MPI.COMM_WORLD
-rank = comm.rank
+rank = comm.Get_rank()
 
+# rank += 20
 # use as scratch space for playing around
 
 
@@ -56,6 +57,7 @@ M0 = M0_list[rank] # upstream mach number
 smax = smax_list[rank] # max stress constraint
 E = E_list[rank]
 
+
 # aero solver
 problem_settings = default_impinge_setup
 # problem_settings.aeroOptions['equationType'] = 'laminar NS'
@@ -75,6 +77,9 @@ else:
     # aeroGridFile = f'../meshes/imp_mphys_73_73_25.cgns'
     # nelem = 30
     # L = .254
+    # aeroGridFile = f'../meshes/imp_long_145_145_25.cgns'
+    # nelem = 78
+    # L = .75
     aeroGridFile = f'../meshes/imp_long_217_217_25.cgns'
     nelem = 117
     L = .75
@@ -120,7 +125,7 @@ prob.model.add_design_var("dv_struct_TRUE", lower = 0.0001, upper = 0.007)
 # prob.model.add_objective("test.struct_post.stresscon")
 
 prob.model.add_objective("test.mass")
-prob.model.add_constraint("test.stresscon", upper = smax)
+prob.model.add_constraint("test.stresscon", upper = 0.)
 # # set constraints
 # prob.model.add_objective("test.aero_post.d_def")
 # prob.model.add_objective("test.struct_post.mass")
@@ -128,8 +133,8 @@ prob.setup(mode='rev')
 # prob.setup(mode='rev')
 
 # set fixed parameters
-prob.model.set_val("shock_angle", s)
-prob.model.set_val("M0", M0)
+prob.set_val("shock_angle", s)
+prob.set_val("M0", M0)
 
 # prob.model.set_val("shock_angle", s)
 # prob.model.add_design_var("M1")
@@ -146,9 +151,9 @@ prob.model.set_val("M0", M0)
 
 
 # recorder 
-recorder = om.SqliteRecorder(f'opt_test_ndv{ndv}_s{s}_M0{M0}_smax{smax}_E{E}.sql')
+recorder = om.SqliteRecorder(f'opt_full_fix_ndv{ndv}_s{s}_M0{M0}_smax{smax}_E{E}.sql')
 prob.driver.add_recorder(recorder)
-
+prob.add_recorder(recorder)
 # s = 25. # shock angle
 # M0 = 2.2 # upstream mach number
 # smax = 1e5 # max stress constraint
@@ -168,7 +173,7 @@ prob.run_driver()
 
 #NOTE: NEED TO SAVE DATA AND CONVERGENCE
 
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 # import copy
 # y0 = copy.deepcopy(prob.get_val("test.aero_post.cd_def"))
 # #totals1 = prob.compute_totals(wrt='rsak')

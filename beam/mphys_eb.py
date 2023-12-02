@@ -631,7 +631,8 @@ if __name__ == '__main__':
     problem_settings.structOptions["Nelem"] = nelem
     problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*10000.0
     problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
-    problem_settings.structOptions['smax'] = 5.0
+    problem_settings.structOptions['smax'] = 50.0
+    # problem_settings.structOptions['smax'] = .20
     prob = om.Problem()
     prob.model = Top(problem_settings=problem_settings)
     
@@ -661,6 +662,8 @@ if __name__ == '__main__':
     # prob.check_totals(step_calc='rel_avg')
 
     prob.check_partials(step_calc = 'rel_avg', minimum_step = 1e-15) # settings are important since displacements are so small
+    print(prob.get_val('test.stress'))
+    print(prob.get_val('test.stresscon'))
     # import pdb; pdb.set_trace()
     #prob.model.list_outputs()
 

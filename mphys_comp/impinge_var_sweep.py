@@ -20,6 +20,8 @@ args = sys.argv[1:]
 
 Ncase = 500
 ndv = 4
+smax = 1e6 # max stress constraint
+E = 690e6
 problem_settings = default_impinge_setup
 problem_settings.ndv_true = ndv
 inputs_s = "dv_struct_TRUE"
@@ -32,7 +34,8 @@ inputs_f = {"M0": 1.5,
 # inputs_f = {"M0": 1.5,
 #             "dv_struct_TRUE": 0.0005,}
 
-
+home = '/home/garobed/'
+# home = '/home/garobed/'
 if inputs_s == "dv_struct_TRUE":
     dim = problem_settings.ndv_true
     # inputs = 
@@ -57,18 +60,20 @@ problem_settings.aeroOptions['NKSwitchTol'] = 1e-4 #1e-6
 problem_settings.aeroOptions['L2Convergence'] = 1e-12
 problem_settings.aeroOptions['printIterations'] = False
 problem_settings.aeroOptions['printTiming'] = False
-# problem_settings.aeroOptions['gridFile'] = f'../meshes/imp_mphys_73_73_25.cgns'
+# problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 # nelem = 30
 
-# problem_settings.aeroOptions['gridFile'] = f'../meshes/imp_mphys_145_145_25.cgns'
-# nelem = 60
+problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_mphys_145_145_25.cgns'
+nelem = 60
+L = 0.254
 
-# problem_settings.aeroOptions['gridFile'] = f'../meshes/imp_long_145_145_25.cgns'
+# problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
 # nelem = 78
+# L = 0.75
 
-problem_settings.aeroOptions['gridFile'] = f'../meshes/imp_long_217_217_25.cgns'
-nelem = 117
-
+# problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+# nelem = 117
+# L = 0.75
 
 problem_settings.nelem = nelem
 problem_settings.structOptions['Nelem'] = nelem
@@ -76,6 +81,9 @@ problem_settings.structOptions['force'] = np.ones(nelem+1)*1.0
 problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
 problem_settings.structOptions["ndv_true"] = ndv
 problem_settings.structOptions["th_true"] = np.ones(ndv)*0.0005
+problem_settings.structOptions['E'] = E
+problem_settings.structOptions['L'] = L
+problem_settings.structOptions['smax'] = smax
 
 if "dv_struct_TRUE" in inputs_f:
     problem_settings.structOptions["th"] = np.ones(nelem+1)*inputs_f["dv_struct_TRUE"]
@@ -90,15 +98,15 @@ home = '/home/garobed/'
 sampling = Random(xlimits=xlimits)
 
 # x = sampling(Ncase)
-title = f'shock_sweep_2_{list(inputs_f.keys())[0]}{inputs_f[list(inputs_f.keys())[0]]}_{list(inputs_f.keys())[1]}{inputs_f[list(inputs_f.keys())[1]]}'
+title = f'shock_sweep_4_{list(inputs_f.keys())[0]}{inputs_f[list(inputs_f.keys())[0]]}_{list(inputs_f.keys())[1]}{inputs_f[list(inputs_f.keys())[1]]}'
 # if not os.path.exists('./{title}/x.npy'):
 #     if rank == 0:
 #         if not os.path.isdir(title):
 #             os.mkdir(title)
-if not os.path.exists(f'~/scratch/{title}/x.npy'):
+if not os.path.exists(f'./{title}/x.npy'):
     if rank == 0:
-        if not os.path.isdir(f'~/scratch/{title}'):
-            os.makedirs(f'~/scratch/{title}')
+        if not os.path.isdir(f'./{title}'):
+            os.makedirs(f'./{title}')
         x = sampling(Ncase)
         with open(f'./{title}/x.npy', 'wb') as f:
             pickle.dump(x, f)
@@ -124,6 +132,7 @@ for i in cases[rank]:
     print(x[i])
     prob.set_val(inputs_s, x[i])
     prob.run_model()
+    # totals = prob.compute_totals(of=['test.struct_post.mass', "test.struct_post.stress", "test.aero_post.d_def"], wrt=['dv_struct_TRUE','shock_angle','M0'])
     y = np.zeros(5)
     sig = None
     if not prob.driver.fail:
@@ -145,5 +154,7 @@ for i in cases[rank]:
         pickle.dump(x[i], f)
     with open(f'./{title}/y_{i}.npy', 'wb') as f:
         pickle.dump(y, f)
+    # with open(f'./{title}/g_{i}.pickle', 'wb') as f:
+    #     pickle.dump(totals, f)
     with open(f'./{title}/s_{i}.npy', 'wb') as f:
         pickle.dump(sig, f)

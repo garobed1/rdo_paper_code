@@ -336,8 +336,181 @@ class ShortColumn1U(Problem):
         return y
 
 
+# Uncertain ellipsoid, intended as constraint. Negative if inside the ellipse, positive if outside, shape of ellipse is uncertain
+class UncertainEllipse(Problem):
+    def _initialize(self):
+        self.options.declare("name", "ShortColumn1U", types=str)
+        self.options.declare("ndim", 7, types=int) # by default, all 7 inputs, the first 2 are location at which to evaluate the equation
+        self.options.declare("fix_radius", 2., types=(type(None), float)) # if none, treat as uncertain param
+        self.options.declare("fix_foci", [0., 0.], types=(type(None), list)) # if none, treat as uncertain params, relative to loc
+        self.options.declare("fix_loc", [0., 0.], types=(type(None), list)) # if none, treat as uncertain params
 
 
+    def _setup(self):
+        # customize uncertainty bounds after setup
+        # matching rosenbrock domain for now for eval loc
+        # locs
+        self.xlimits[0:2, 0] = -2.
+        self.xlimits[0:2, 1] = 2.
+        # radius
+        self.xlimits[2, 0] = 1.
+        self.xlimits[2, 1] = 3.
+        # focus x (limit to right hand plane)
+        self.xlimits[3, 0] = 0.
+        self.xlimits[3, 1] = 1.
+        # focus y
+        self.xlimits[4, 0] = -1.
+        self.xlimits[4, 1] = 1.
+        # location
+        self.xlimits[5:7, 0] = -1.
+        self.xlimits[5:7, 1] = 1.
+
+        var_list = [0, 1]
+        if self.options["fix_radius"] is None:
+            var_list.append(2)
+        if self.options["fix_foci"] is None:
+            var_list.append([3, 4])
+        if self.options["fix_loc"] is None:
+            var_list.append([5, 6])
+
+        # correct it
+        self.options["ndim"] = len(var_list)
+        self.xlimits = self.xlimits[var_list, :]
+        self.var_list = var_list
+
+
+
+    def _evaluate(self, x, kx):
+        """
+        Arguments
+        ---------
+        x : ndarray[ne, nx]
+            Evaluation points.
+        kx : int or None
+            Index of derivative (0-based) to return values with respect to.
+            None means return function value rather than derivative.
+
+        Returns
+        -------
+        ndarray[ne, 1]
+            Functions values if kx=None or derivative values if kx is an int.
+        """
+        ne, nx = x.shape
+
+        # get inputs
+        ex = x[:,0]
+        ey = x[:,1]
+        if self.options["fix_radius"] is None:
+            r = x[:,self.var_list.index(2)]
+        else:
+            r = self.options["fix_radius"]
+        if self.options["fix_foci"] is None:
+            fx = x[:,self.var_list.index(3)]
+            fy = x[:,self.var_list.index(4)]
+        else:
+            fx, fy = self.options["fix_foci"][0], self.options["fix_foci"][1]
+        if self.options["fix_loc"] is None:
+            lx = x[:,self.var_list.index(5)]
+            ly = x[:,self.var_list.index(6)]
+        else:
+            lx, ly = self.options["fix_loc"][0], self.options["fix_loc"][1]
+        r, fx, fy, lx, ly = self.get_all_vars(x)
+        
+        y = np.zeros((ne, 1), complex)
+        # translation
+        cx = ex - lx
+        cy = ey - ly
+        # rotation
+        # frac = fy/fx
+        tf = np.arctan2(fy, fx)
+        ctf = np.cos(tf)
+        stf = np.sin(tf)
+        rx = cx*ctf - cy*stf
+        ry = cx*stf + cy*ctf
+
+        if kx is None:
+            y[:,0] = np.sqrt((rx - fx)**2 + ry**2)
+            y[:,0] += np.sqrt((rx + fx)**2 + ry**2)
+            y[:,0] -= r
+            kxt = -1
+        # eval
+        else:
+            kxt = self.var_list[kx]
+        if kxt in [0, 1, 3, 4, 5, 6]:
+            if kxt == 0 or kxt == 1:
+                if kxt == 0:
+                    drx = ctf
+                    dry = stf
+                if kxt == 1:
+                    drx = -stf
+                    dry = ctf
+            # loc
+            if kxt == 5 or kxt == 6:
+                if kxt == 5:
+                    drx = -ctf
+                    dry = -stf
+                if kxt == 6:
+                    drx = stf
+                    dry = -ctf
+            # focus
+            if kxt == 3 or kxt == 4:
+                if self.var_list[kx] == 3:
+                    dtf = -fy/(fx**2 + fy**2)
+                if self.var_list[kx] == 4:
+                    dtf = fx/(fx**2 + fy**2)
+                dctf = -stf*dtf
+                dstf = ctf*dtf
+                drx = cx*dctf - cy*dstf
+                dry = cx*dstf + cy*dctf
+
+                dctf = -stf*dtf
+                dstf = ctf*dtf
+                drx = cx*dctf - cy*dstf
+                dry = cx*dstf + cy*dctf
+            # finally
+            dh1 = 0.5/np.sqrt((rx - fx)**2 + ry**2)
+            dh1 *= 2*(rx - fx)*drx + 2*ry*dry
+            dh2 = 0.5/np.sqrt((rx + fx)**2 + ry**2)
+            dh2 *= 2*(rx + fx)*drx + 2*ry*dry
+            y[:,0] = dh1 + dh2
+        # radius
+        if kxt == 2:
+            y[:,0] = -1.
+
+        return y
+
+    # get the shape variables, either from x or from the options
+    def get_all_vars(self, x):
+        if self.options["fix_radius"] is None:
+            r = x[:,self.var_list.index(2)]
+        else:
+            r = self.options["fix_radius"]
+        if self.options["fix_foci"] is None:
+            fx = x[:,self.var_list.index(3)]
+            fy = x[:,self.var_list.index(4)]
+        else:
+            fx, fy = self.options["fix_foci"][0], self.options["fix_foci"][1]
+        if self.options["fix_loc"] is None:
+            lx = x[:,self.var_list.index(5)]
+            ly = x[:,self.var_list.index(6)]
+        else:
+            lx, ly = self.options["fix_loc"][0], self.options["fix_loc"][1]
+        return r, fx, fy, lx, ly
+
+    # get evenly spaced points on the ellipse
+    # x : sample input, we only take the shape parameters, if appropriate. only the first entry
+    # def get_ellipse_points(self, x, N = 1000):
+    #     if len(x.shape) == 1:
+    #         x_use = np.array([x])
+    #     else:
+    #         x_use = x[0,:]
+        
+    #     r, fx, fy, lx, ly = self.get_all_vars(x_use)
+
+    #     th = np.linspace(0, 2*np.pi, N)
+
+        
+        
 
 
 
@@ -356,6 +529,7 @@ if __name__ == '__main__':
     #                             retain_uncertain_points=True)
     
     import matplotlib.pyplot as plt
+    from matplotlib import colors
     from smt.problems import Rosenbrock
     from smt.sampling_methods import LHS
     from utils.sutils import convert_to_smt_grads
@@ -363,43 +537,66 @@ if __name__ == '__main__':
 
     plt.rcParams['font.size'] = '15'
 
-    ndir = 150
+    ndir =150
     nu = 5000
-    ## ShortCol1U
-    func = ShortColumn1U(ndim=3)
-    xlimits = func.xlimits
-    x1 = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
-    x2 = np.linspace(xlimits[2][0], xlimits[2][1], ndir)
+
+    
+    # ## ShortCol1U
+    # func = ShortColumn1U(ndim=3)
+    # xlimits = func.xlimits
+
+    ## UncertainEllipse
+    # eval only
+    func = UncertainEllipse()
+    func = UncertainEllipse(fix_foci=[0.5, 0.3,], fix_loc=[-0.5, 0.5])
+    # r = func.options["fix_radius"]
+    # r = func.options["fix_radius"]
+    # r = func.options["fix_radius"]
+
+    xlimits = func.xlimits[0:2, :]
+    x1 = np.linspace(xlimits[0][0], xlimits[0][1], ndir)
+    x2 = np.linspace(xlimits[1][0], xlimits[1][1], ndir)
     samp = LHS(xlimits=xlimits[0:1], criterion='maximin')
-    area = xlimits[0][1] - xlimits[0][0]
-    x0 = samp(nu)
-    pdf = norm(500, 100)
-    weight = pdf.pdf(x0)
+    # area = xlimits[0][1] - xlimits[0][0]
+    # x0 = samp(nu)
+    # pdf = norm(500, 100)
+    # weight = pdf.pdf(x0)
     X1, X2 = np.meshgrid(x1, x2)
 
     TF = np.zeros([ndir, ndir])
     for i in range(len(x1)):
         for j in range(len(x2)):
-            xi = np.zeros([nu,3])
-            xi[:,1] = x1[i]
-            xi[:,2] = x2[j]
-            xi[:,0] = x0[:,0]
+            xi = np.zeros([nu,2])
+            xi[:,0] = x1[i]
+            xi[:,1] = x2[j]
+            # xi[:,0] = x0[:,0]
             eval = func(xi)
-            weval = np.dot(eval.T, weight)*area
-            TF[i,j] = weval/nu
+            # weval = np.dot(eval.T, weight)*area
+            # TF[i,j] = weval/nu
+            TF[i,j] = eval[0]
 
     # # Plot the target function
-    plt.contourf(X1, X2, TF.T, levels=15, label=f'True')
-    plt.xlabel(r"$x_{d,1}$")
-    plt.ylabel(r"$x_{d,2}$")
-    plt.colorbar(label=r"$S(x_{d,1}, x_{d,2})$")
-    # import pdb; pdb.set_trace()
-    # minindx = np.argmin(TF.T, keepdims=True)
-    minind = np.where(TF.T == np.min(TF.T))
-    plt.scatter(x1[minind[1]][0], x2[minind[0]][0], color='r')
-    plt.scatter(9., 15., color='b')
+    vmin = np.min(TF) 
+    vmax = np.max(TF)
+    plt.contourf(X1, X2, TF.T, levels=25, label=f'True', cmap='RdBu_r',
+                  norm=colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax))
+    # plt.xlabel(r"$x_{d,1}$")
+    # plt.ylabel(r"$x_{d,2}$")
+    plt.xlabel(r"$x$")
+    plt.ylabel(r"$y$")
+
+    # vmin = np.min(TF) 
+    # vmax = np.max(TF)
+    # norm = colors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+
+    plt.colorbar(label=r"$F(x,y)$")
+    # # import pdb; pdb.set_trace()
+    # # minindx = np.argmin(TF.T, keepdims=True)
+    # minind = np.where(TF.T == np.min(TF.T))
+    # plt.scatter(x1[minind[1]][0], x2[minind[0]][0], color='r')
+    # plt.scatter(9., 15., color='b')
     #plt.legend(loc=1)
-    plt.savefig(f"./2dshortcol1u.png", bbox_inches="tight")
+    plt.savefig(f"./2dellipse.png", bbox_inches="tight")
     plt.clf()
     import pdb; pdb.set_trace()
 
