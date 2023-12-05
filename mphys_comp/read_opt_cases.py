@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import openmdao.api as om
 import numpy as np
 import argparse
+import os
 
 # parse command line arguments
 parser = argparse.ArgumentParser()
@@ -11,11 +12,7 @@ args = parser.parse_args()
 optcase = args.optcase
 
 # Instantiate your CaseReader
-cr = om.CaseReader(optcase)
-
-# Get driver cases (do not recurse to system/solver cases)
-driver_cases = cr.get_cases('driver', recurse=False)
-
+cr = []
 # Plot the path the design variables took to convergence
 # Note that there are two lines in the right plot because "Z"
 # contains two variables that are being optimized
@@ -23,11 +20,27 @@ dv_values = []
 obj_values = []
 con_values = []
 
+
+cr.append(om.CaseReader(optcase))
+
+# also look for subsequent files
+i = 1
+get_more = True
+while get_more:
+    title = optcase.split('.')[:-1].join() + f'_{i}.sql'
+    if os.path.isfile(title):
+        cr.append(om.CaseReader(title))
+    else:
+        get_more = False
+    i += 1
 # import pdb; pdb.set_trace()
-for case in driver_cases:
-    dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
-    obj_values.append(case.get_objectives()['test.mass'])
-    con_values.append(case.get_constraints()['test.stresscon'])
+for reader in cr:
+    # Get driver cases (do not recurse to system/solver cases)
+    driver_cases = reader.get_cases('driver', recurse=False)    
+    for case in driver_cases:
+        dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
+        obj_values.append(case.get_objectives()['test.mass'])
+        con_values.append(case.get_constraints()['test.stresscon'])
 
 # import pdb; pdb.set_trace()
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)

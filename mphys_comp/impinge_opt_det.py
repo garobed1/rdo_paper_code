@@ -105,9 +105,9 @@ problem_settings.structOptions['L'] = L
 problem_settings.structOptions['smax'] = smax
 problem_settings.structOptions['Nelem'] = nelem
 problem_settings.structOptions['force'] = np.ones(nelem+1)*1.0
-problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
+problem_settings.structOptions["th"] = np.ones(nelem+1)*0.006 #start high
 problem_settings.structOptions["ndv_true"] = ndv
-problem_settings.structOptions["th_true"] = np.ones(ndv)*0.0005
+problem_settings.structOptions["th_true"] = np.ones(ndv)*0.006
 
 prob = om.Problem(comm=MPI.COMM_SELF)
 prob.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
