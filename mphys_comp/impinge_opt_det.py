@@ -2,7 +2,7 @@ import imp
 import numpy as np
 import argparse
 from mpi4py import MPI
-import sys
+import os,sys, copy
 
 import openmdao.api as om
 
@@ -32,7 +32,7 @@ import mphys_comp.impinge_setup as default_impinge_setup
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-# rank += 20
+# rank += 1
 # use as scratch space for playing around
 
 
@@ -45,11 +45,12 @@ full_far = False
 subsonic = False
 
 ### PARAMS ###
-nsweep = 9
-s_list = 4*[25., 25., 25., 22., 22., 22., 27., 27., 27.]
-M0_list = 4*[1.4, 2.2, 3.0, 1.4, 2.2, 3.0, 1.4, 2.2, 3.0]
-smax_list = nsweep*[1e5] + nsweep*[1e6] + nsweep*[1e5] +  nsweep*[1e6] 
-E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[6900000000] + nsweep*[6900000000]
+nsweep = 12
+s_list = 4*[25., 25., 25., 25., 22., 22., 22., 22., 27., 27., 27., 27.]
+M0_list = 4*[1.4, 1.8, 2.2, 2.6, 1.4, 1.8, 2.2, 2.6, 1.4, 1.8, 2.2, 2.6]
+# M0_list = 4*[1.4, 2.2, 3.0, 1.4, 2.2, 3.0, 1.4, 2.2, 3.0]
+smax_list = nsweep*[5e5] + nsweep*[1e6] + nsweep*[5e5] +  nsweep*[1e6] 
+E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[34500000000] + nsweep*[34500000000]
 
 ndv = 4 # number of thickness variables
 s = s_list[rank] # shock angle
@@ -69,20 +70,27 @@ problem_settings.aeroOptions['L2Convergence'] = 1e-12
 problem_settings.aeroOptions['printIterations'] = False
 problem_settings.aeroOptions['printTiming'] = True
 
+name = 'test_cci_write'
+home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+barn = 'barn'
+# name = 'test_case_reload'
+# home = '/home/garobed/'
+# barn = ''
+
 if full_far:
-    aeroGridFile = f'../meshes/imp_TEST_73_73_25.cgns'
+    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_TEST_73_73_25.cgns'
 elif subsonic:
-    aeroGridFile = f'../meshes/imp_subs_73_73_25.cgns'
+    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_subs_73_73_25.cgns'
 else:
-    # aeroGridFile = f'../meshes/imp_mphys_73_73_25.cgns'
-    # nelem = 30
-    # L = .254
-    # aeroGridFile = f'../meshes/imp_long_145_145_25.cgns'
+    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
+    nelem = 30
+    L = .254
+    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
     # nelem = 78
     # L = .75
-    aeroGridFile = f'../meshes/imp_long_217_217_25.cgns'
-    nelem = 117
-    L = .75
+    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+    # nelem = 117
+    # L = .75
 problem_settings.aeroOptions['gridFile'] = aeroGridFile
 
 # aero settings
@@ -150,10 +158,30 @@ prob.set_val("M0", M0)
 # prob.model.add_design_var("P0")
 
 
+title = f'{name}_ndv{ndv}_s{s}_M0{M0}_smax{smax}_E{E}.sql'
+get_last_case = False
+i = 0
+while os.path.isfile(title):
+    i += 1
+    get_last_case = True
+    # check if subsequent file exists
+    title_old = copy.deepcopy(title)
+    title = f'{name}_ndv{ndv}_s{s}_M0{M0}_smax{smax}_E{E}_{i}.sql'
+
+if get_last_case:
+    cr = om.CaseReader(title_old)
+    last_case = cr.get_case(-1)
+    prob.load_case(last_case)
+    import pdb; pdb.set_trace()
+
 # recorder 
-recorder = om.SqliteRecorder(f'opt_full_fix_ndv{ndv}_s{s}_M0{M0}_smax{smax}_E{E}.sql')
+recorder = om.SqliteRecorder(title)
 prob.driver.add_recorder(recorder)
-prob.add_recorder(recorder)
+prob.driver.recording_options['record_inputs'] = True
+prob.driver.recording_options['record_outputs'] = True
+prob.driver.recording_options['record_residuals'] = True
+prob.driver.recording_options['record_derivatives'] = True
+
 # s = 25. # shock angle
 # M0 = 2.2 # upstream mach number
 # smax = 1e5 # max stress constraint
