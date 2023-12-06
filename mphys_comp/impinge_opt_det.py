@@ -50,7 +50,7 @@ s_list = 4*[25., 25., 25., 25., 22., 22., 22., 22., 27., 27., 27., 27.]
 M0_list = 4*[1.4, 1.8, 2.2, 2.6, 1.4, 1.8, 2.2, 2.6, 1.4, 1.8, 2.2, 2.6]
 # M0_list = 4*[1.4, 2.2, 3.0, 1.4, 2.2, 3.0, 1.4, 2.2, 3.0]
 smax_list = nsweep*[5e5] + nsweep*[1e6] + nsweep*[5e5] +  nsweep*[1e6] 
-E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[34500000000] + nsweep*[34500000000]
+E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[54500000000] + nsweep*[54500000000]
 
 ndv = 4 # number of thickness variables
 s = s_list[rank] # shock angle
@@ -70,7 +70,7 @@ problem_settings.aeroOptions['L2Convergence'] = 1e-12
 problem_settings.aeroOptions['printIterations'] = False
 problem_settings.aeroOptions['printTiming'] = True
 
-name = 'test_cci_write'
+name = 'opt_full_fix'
 home = '/gpfs/u/home/ODLC/ODLCbdnn/'
 barn = 'barn'
 # name = 'test_case_reload'
@@ -82,15 +82,15 @@ if full_far:
 elif subsonic:
     aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_subs_73_73_25.cgns'
 else:
-    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
-    nelem = 30
-    L = .254
+    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
+    # nelem = 30
+    # L = .254
     # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
     # nelem = 78
     # L = .75
-    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
-    # nelem = 117
-    # L = .75
+    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+    nelem = 117
+    L = .75
 problem_settings.aeroOptions['gridFile'] = aeroGridFile
 
 # aero settings
@@ -111,6 +111,7 @@ problem_settings.structOptions["th_true"] = np.ones(ndv)*0.006
 
 prob = om.Problem(comm=MPI.COMM_SELF)
 prob.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
+# prob.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
 prob.model = Top(problem_settings=problem_settings, subsonic=subsonic,
                                                      use_shock_comp=use_shock, 
                                                      use_inflow_comp=use_inflow, 
@@ -125,7 +126,7 @@ prob.model = Top(problem_settings=problem_settings, subsonic=subsonic,
 
 
 # set design variables
-prob.model.add_design_var("dv_struct_TRUE", lower = 0.0001, upper = 0.007)
+prob.model.add_design_var("dv_struct_TRUE", lower = 0.006, upper = 0.007)
 # prob.model.add_design_var("shock_angle")
 
 # set objective
@@ -172,15 +173,20 @@ if get_last_case:
     cr = om.CaseReader(title_old)
     last_case = cr.get_case(-1)
     prob.load_case(last_case)
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
 
 # recorder 
 recorder = om.SqliteRecorder(title)
+prob.model.add_recorder(recorder)
 prob.driver.add_recorder(recorder)
 prob.driver.recording_options['record_inputs'] = True
 prob.driver.recording_options['record_outputs'] = True
 prob.driver.recording_options['record_residuals'] = True
 prob.driver.recording_options['record_derivatives'] = True
+prob.model.recording_options['record_inputs'] = True
+prob.model.recording_options['record_outputs'] = True
+prob.model.recording_options['record_residuals'] = True
+prob.model.recording_options['record_derivatives'] = True
 
 # s = 25. # shock angle
 # M0 = 2.2 # upstream mach number

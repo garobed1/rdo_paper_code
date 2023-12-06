@@ -27,11 +27,12 @@ cr.append(om.CaseReader(optcase))
 i = 1
 get_more = True
 while get_more:
-    title = optcase.split('.')[:-1].join() + f'_{i}.sql'
+    title = '.'.join(optcase.split('.')[:-1]) + f'_{i}.sql'
     if os.path.isfile(title):
         cr.append(om.CaseReader(title))
     else:
         get_more = False
+    
     i += 1
 # import pdb; pdb.set_trace()
 for reader in cr:
@@ -41,7 +42,7 @@ for reader in cr:
         dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
         obj_values.append(case.get_objectives()['test.mass'])
         con_values.append(case.get_constraints()['test.stresscon'])
-
+import pdb; pdb.set_trace()
 # import pdb; pdb.set_trace()
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.5, hspace=None)
@@ -60,5 +61,11 @@ ax3.set(xlabel='Iterations', ylabel='Thickness DV 2')
 ax3.grid()
 
 plt.savefig(f'{optcase[:-4]}.png', bbox_inches='tight')
+plt.clf()
+
+# final design
+
+L = 1. # normalized length i guess
+
 
 # plt.show()
