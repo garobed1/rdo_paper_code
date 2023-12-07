@@ -3,7 +3,7 @@
 import numpy as np
 #from tacs import TACS, elements, constitutive, functions
 
-outputDirectory = '../flow_results'
+outputDirectory = '.'
 aeroGridFile = f'../meshes/imp_mphys_145_145_25.cgns'
 alpha = 0. #
 beta = 7.2833969362749187
@@ -147,7 +147,7 @@ warpOptions = { #IDwarp mesh movement options
   'bExp': 5.0,
   'LdefFact':1.0,
   'alpha':0.25,
-  'errTol':0.0001,
+  'errTol':0.000001,
   'evalMode':'fast',
   'useRotations':True,
   'zeroCornerRotations':True,

@@ -624,13 +624,13 @@ if __name__ == '__main__':
     ################################################################################
 
 
-    nelem = 30
+    nelem = 117
     problem_settings = default_impinge_setup
     problem_settings.nelem = nelem
     ndv_true = problem_settings.ndv_true
     problem_settings.structOptions["Nelem"] = nelem
-    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*10000.0
-    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0005
+    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*1000000000.0
+    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.006
     problem_settings.structOptions['smax'] = 50.0
     # problem_settings.structOptions['smax'] = .20
     prob = om.Problem()
@@ -654,8 +654,9 @@ if __name__ == '__main__':
     #prob.set_val("beta", 7.)
     #x = np.linspace(2.5, 3.5, 10)
 
-
-    # import pdb; pdb.set_trace()
+    print(prob.get_val("test.struct_states"))
+    print(np.mean(prob.get_val("test.struct_states")))
+    import pdb; pdb.set_trace()
     #prob.model.approx_totals()
 
 

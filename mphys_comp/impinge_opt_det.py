@@ -70,12 +70,12 @@ problem_settings.aeroOptions['L2Convergence'] = 1e-12
 problem_settings.aeroOptions['printIterations'] = False
 problem_settings.aeroOptions['printTiming'] = True
 
-name = 'opt_full_fix'
-home = '/gpfs/u/home/ODLC/ODLCbdnn/'
-barn = 'barn'
+name = 'find_disp_issue'
+# home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+# barn = 'barn'
 # name = 'test_case_reload'
-# home = '/home/garobed/'
-# barn = ''
+home = '/home/garobed/'
+barn = ''
 
 if full_far:
     aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_TEST_73_73_25.cgns'
@@ -85,12 +85,12 @@ else:
     # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
     # nelem = 30
     # L = .254
-    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
-    # nelem = 78
-    # L = .75
-    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
-    nelem = 117
+    aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
+    nelem = 78
     L = .75
+    # aeroGridFile = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+    # nelem = 117
+    # L = .75
 problem_settings.aeroOptions['gridFile'] = aeroGridFile
 
 # aero settings
@@ -110,8 +110,11 @@ problem_settings.structOptions["ndv_true"] = ndv
 problem_settings.structOptions["th_true"] = np.ones(ndv)*0.006
 
 prob = om.Problem(comm=MPI.COMM_SELF)
-prob.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
-# prob.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+try:
+    import pyoptsparse
+    prob.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+except:
+    prob.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 prob.model = Top(problem_settings=problem_settings, subsonic=subsonic,
                                                      use_shock_comp=use_shock, 
                                                      use_inflow_comp=use_inflow, 
@@ -126,7 +129,7 @@ prob.model = Top(problem_settings=problem_settings, subsonic=subsonic,
 
 
 # set design variables
-prob.model.add_design_var("dv_struct_TRUE", lower = 0.006, upper = 0.007)
+prob.model.add_design_var("dv_struct_TRUE", lower = 0.0004, upper = 0.007)
 # prob.model.add_design_var("shock_angle")
 
 # set objective
@@ -177,16 +180,16 @@ if get_last_case:
 
 # recorder 
 recorder = om.SqliteRecorder(title)
-prob.model.add_recorder(recorder)
+# prob.model.add_recorder(recorder)
 prob.driver.add_recorder(recorder)
 prob.driver.recording_options['record_inputs'] = True
 prob.driver.recording_options['record_outputs'] = True
 prob.driver.recording_options['record_residuals'] = True
 prob.driver.recording_options['record_derivatives'] = True
-prob.model.recording_options['record_inputs'] = True
-prob.model.recording_options['record_outputs'] = True
-prob.model.recording_options['record_residuals'] = True
-prob.model.recording_options['record_derivatives'] = True
+# prob.model.recording_options['record_inputs'] = True
+# prob.model.recording_options['record_outputs'] = True
+# prob.model.recording_options['record_residuals'] = True
+# prob.model.recording_options['record_derivatives'] = True
 
 # s = 25. # shock angle
 # M0 = 2.2 # upstream mach number

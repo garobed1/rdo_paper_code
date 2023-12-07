@@ -8,7 +8,7 @@ class beamDVComp(om.ExplicitComponent):
     """
     def initialize(self):
         self.options.declare("ndv")
-        self.options.declare("method")
+        self.options.declare("method", 'bsplines')
 
         self.ndv = None
         self.interp = None

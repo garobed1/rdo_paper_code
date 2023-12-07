@@ -1,6 +1,6 @@
 from scipy.sparse.linalg.dsolve import spsolve
 import numpy as np
-from scipy.sparse.linalg.dsolve.linsolve import spsolve_triangular
+# from scipy.sparse.linalg.dsolve.linsolve import spsolve_triangular
 from beam.hermite_basis import cubicHermite, cubicHermiteD, cubicHermiteD2
 import beam.assembly as asm
 from beam.utils import Error
@@ -77,7 +77,6 @@ class EulerBeamSolver():
 
         # solve
         self.u = spsolve(self.A, self.b)
-
         self.req_solve = False
         return self.u
 

@@ -42,7 +42,7 @@ for reader in cr:
         dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
         obj_values.append(case.get_objectives()['test.mass'])
         con_values.append(case.get_constraints()['test.stresscon'])
-import pdb; pdb.set_trace()
+# import pdb; pdb.set_trace()
 # import pdb; pdb.set_trace()
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 fig.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.5, hspace=None)
@@ -66,6 +66,34 @@ plt.clf()
 # final design
 
 L = 1. # normalized length i guess
+ns = 150
+x = np.linspace(0., L, ns)
+from beam.om_beamdvs import beamDVComp
+import copy
+fig, (ax1) = plt.subplots(1, 1)
+fig.set_size_inches(12, 6)
+dv_init = cr[0].get_cases('driver', recurse=False)[0].get_design_vars()['dv_struct_TRUE']
+dv_final = case.get_design_vars()['dv_struct_TRUE']
+# import pdb; pdb.set_trace()
+ndv = dv_final.size
+dvprob = om.Problem()
+dvprob.model.add_subsystem('dvcomp', beamDVComp(ndv=ndv), promotes_outputs=['th'])
+dvprob.model.add_subsystem('sink', om.ExecComp('y=th', shape=ns), promotes_inputs=['th'])
+dvprob.setup()
+dvprob.set_val('dvcomp.DVS', dv_final)
+dvprob.run_model()
+th_final = copy.deepcopy(dvprob.get_val('sink.y'))
+dvprob.set_val('dvcomp.DVS', dv_init)
+dvprob.run_model()
+th_init = copy.deepcopy(dvprob.get_val('sink.y'))
 
-
+plt.plot(x, th_init/2., 'k-')
+plt.plot(x, -th_init/2., 'k-')
+plt.plot(x, th_final/2., 'r-')
+plt.plot(x, -th_final/2., 'r-')
+plt.grid()
+plt.xlabel(rf'$s$')
+plt.ylabel(rf'$y$')
+plt.savefig(f'{optcase[:-4]}_final.png', bbox_inches='tight')
+plt.clf()
 # plt.show()
