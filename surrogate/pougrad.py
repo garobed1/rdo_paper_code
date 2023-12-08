@@ -8,14 +8,18 @@ from scipy.spatial import KDTree
 from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.stats import qmc
 from utils.sutils import estimate_pou_volume, innerMatrixProduct, quadraticSolveHOnly, symMatfromVec
-from utils.sutils import standardization2
+from utils.sutils import standardization2, divide_cases
+from mpi4py import MPI
 
-para = False
-try:
-    from numba import njit, prange
-    para = True
-except:
-    pass
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+# para = False
+# try:
+#     from numba import njit, prange
+#     para = True
+# except:
+#     pass
 
 #from pou_cython_ext import POUEval
 
@@ -134,7 +138,9 @@ class POUSurrogate(SurrogateModel):
 
         # loop over rows in xt
         y_ = np.zeros(numeval)
-        for k in range(numeval): ###NOTE: TURN INTO PRANGE?
+        cases = divide_cases(numeval, size)
+        for k in cases[rank]:
+        # for k in range(numeval): ###NOTE: TURN INTO PRANGE?
         # for k in prange(numeval): ###NOTE: TURN INTO PRANGE?
             x = X_cont[k,:]
 
@@ -166,7 +172,7 @@ class POUSurrogate(SurrogateModel):
             # exec2 += t2-t1
 
             y_[k] = numer/denom
-
+        y_ = comm.allreduce(y_)
         y = (self.y_mean + self.y_std * y_).ravel()
 
         # print("mindist  = ", exec1)
@@ -231,7 +237,9 @@ class POUSurrogate(SurrogateModel):
         d1_ = np.zeros(numeval)
         d2_ = np.zeros(numeval)
         d3_ = np.zeros(numeval)
-        for k in range(numeval):
+        cases = divide_cases(numeval, size)
+        for k in cases[rank]:
+        # for k in range(numeval):
         # for k in prange(numeval):
             x = X_cont[k,:]
 
@@ -273,6 +281,10 @@ class POUSurrogate(SurrogateModel):
             d3_[k] = -(numer*ddenom)/(denom**2)
 
             # dy_dx_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
+        y_ = comm.allreduce(y_)
+        d1_ = comm.allreduce(d1_)
+        d2_ = comm.allreduce(d2_)
+        d3_ = comm.allreduce(d3_)
 
         y = (self.y_mean + self.y_std * y_).ravel()
         # dy_dx = (self.y_std * dy_dx_).ravel()/self.X_scale[kx] 
@@ -429,7 +441,9 @@ class POUHessian(POUSurrogate):
         hess = np.zeros([self.ntr, self.dim, self.dim])
         mcs = np.zeros(self.ntr)
         # import pdb; pdb.set_trace()
-        for i in range(self.ntr):
+        cases = divide_cases(self.ntr, size)
+        for i in cases[rank]:
+        # for i in range(self.ntr):
             Hh, mc = quadraticSolveHOnly(self.X_norma[i,:], self.X_norma[indn[i][1:nstencil],:], \
                                      self.y_norma[i], self.y_norma[indn[i][1:nstencil]], \
                                      self.g_norma[i,:], self.g_norma[indn[i][1:nstencil],:], return_cond=True)
@@ -440,10 +454,10 @@ class POUHessian(POUSurrogate):
             for j in range(self.dim):
                 for k in range(self.dim):
                     hess[i,j,k] = Hh[symMatfromVec(j,k,self.dim)]
-
-        self.h = hess
-        self.Mc = mcs
-
+        # self.h = hess
+        # self.Mc = mcs
+        self.h = comm.allreduce(hess)
+        self.Mc = comm.allreduce(mcs)
         # self.dV = estimate_pou_volume(self.training_points[None][0][0], self.options["bounds"])
 
 

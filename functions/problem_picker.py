@@ -1,6 +1,6 @@
 import numpy as np
 from functions.example_problems import BetaRobust1D, BetaRobustEx1D, ToyLinearScale, Ishigami, Peaks2D, QuadHadamard, MultiDimJump, MultiDimJumpTaper, FuhgSingleHump, FuhgP3, FuhgP8, FuhgP9, FuhgP10, FakeShock
-from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine, ShortColumn, ShortColumn1U
+from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine, ShortColumn, ShortColumn1U, UncertainEllipse
 from smt.problems import TensorProduct, Branin, Sphere, LpNorm, Rosenbrock, WaterFlow, WeldedBeam, RobotArm, CantileverBeam, WingWeight
 from functions.shock_problem import ImpingingShock
 from mpi4py import MPI
@@ -79,6 +79,8 @@ def GetProblem(prob, dim, alpha = 8., use_design=False):
         trueFunc = BetaRobust1D(ndim=dim)
     elif(prob == "betatestex"):
         trueFunc = BetaRobustEx1D(ndim=dim)
+    elif(prob == "uellipse"):
+        trueFunc = UncertainEllipse(fix_radius=None, fix_foci=None, fix_loc=None)
     else:
         raise ValueError("Given problem not valid.")
 

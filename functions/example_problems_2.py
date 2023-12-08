@@ -369,9 +369,11 @@ class UncertainEllipse(Problem):
         if self.options["fix_radius"] is None:
             var_list.append(2)
         if self.options["fix_foci"] is None:
-            var_list.append([3, 4])
+            var_list.append(3)
+            var_list.append(4)
         if self.options["fix_loc"] is None:
-            var_list.append([5, 6])
+            var_list.append(5)
+            var_list.append(6)
 
         # correct it
         self.options["ndim"] = len(var_list)
@@ -455,7 +457,7 @@ class UncertainEllipse(Problem):
             # focus
             if kxt == 3 or kxt == 4:
                 if self.var_list[kx] == 3:
-                    dtf = -fy/(fx**2 + fy**2)
+                    dtf = -fy/(fx**2 + fy**2) # FIX
                 if self.var_list[kx] == 4:
                     dtf = fx/(fx**2 + fy**2)
                 dctf = -stf*dtf
@@ -468,10 +470,14 @@ class UncertainEllipse(Problem):
                 drx = cx*dctf - cy*dstf
                 dry = cx*dstf + cy*dctf
             # finally
+            drx2 = 0. + drx
+            if kxt == 3:
+                drx -= 1.
+                drx2 += 1.
             dh1 = 0.5/np.sqrt((rx - fx)**2 + ry**2)
             dh1 *= 2*(rx - fx)*drx + 2*ry*dry
             dh2 = 0.5/np.sqrt((rx + fx)**2 + ry**2)
-            dh2 *= 2*(rx + fx)*drx + 2*ry*dry
+            dh2 *= 2*(rx + fx)*drx2 + 2*ry*dry
             y[:,0] = dh1 + dh2
         # radius
         if kxt == 2:
