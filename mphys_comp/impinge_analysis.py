@@ -211,7 +211,8 @@ class Top(Multipoint):
         self.test.aero_post.mphys_set_ap(ap)
         # self.test.struct_post.funcs.setup_outs()
 
-        self.connect("rsak", "test.coupling.aero.rsak")
+        # TODO: Customize SA var connection
+        # self.connect("rsak", "test.coupling.aero.rsak")
         self.connect("dv_struct_TRUE", "dv_interp.DVS")
         self.connect("dv_interp.th", "test.dv_struct")
         # ### NOTE TODO ALERT TODO NOTE ### THIS IS MESSED UP

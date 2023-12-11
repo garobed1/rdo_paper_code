@@ -1,8 +1,11 @@
 import numpy as np
 from utils.sutils import convert_to_smt_grads
 import copy
+from mpi4py import MPI
 
-
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 
 
@@ -19,10 +22,15 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
 
     # uniform importance sampled monte carlo integration
     #NOTE: REMEMBER TO CITE/MENTION THIS
-    arrs = np.array_split(tx, dim)
+
+    # split by dim/size
+    split = int(dim/size)
+    
+    arrs = np.array_split(tx, split)
     l1 = 0
     l2 = 0
-    for k in range(dim):
+    # import pdb; pdb.set_trace()
+    for k in range(split):
         l2 += arrs[k].shape[0]
         if(tf is not None): #data
             vals[l1:l2,:] = tf[l1:l2,:]
@@ -45,7 +53,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
     A = (sum(dens)/N_act)*(area)
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
-    # import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     return (mean, stdev), vals
 
 
@@ -63,10 +71,11 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     
     N_act = 1
 
-    arrs = np.array_split(tx, dim)
+    split = int(dim/size)
+    arrs = np.array_split(tx, split)
     l1 = 0
     l2 = 0
-    for k in range(dim):
+    for k in range(split):
         l2 += arrs[k].shape[0]
         
         # tf is needed

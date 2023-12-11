@@ -1,18 +1,23 @@
 import numpy as np
 import copy
 
-from matplotlib import pyplot as plt
-from smt.utils.options_dictionary import OptionsDictionary
-from smt.sampling_methods import LHS
-from smt.surrogate_models import GEKPLS, KPLS, KRG
-from surrogate.pougrad import POUCV, POUError, POUErrorVol, POUMetric, POUSurrogate, POUHessian
+# from matplotlib import pyplot as plt
+# from smt.utils.options_dictionary import OptionsDictionary
+# from smt.sampling_methods import LHS
+# from smt.surrogate_models import GEKPLS, KPLS, KRG
+from surrogate.pougrad import POUHessian
 from infill.refinecriteria import ASCriteria
-from scipy.linalg import lstsq, eig
+# from scipy.linalg import lstsq, eig
 from scipy.stats import qmc
 from scipy.spatial import KDTree
 from scipy.spatial.distance import pdist, cdist, squareform
-from scipy.optimize import Bounds
+# from scipy.optimize import Bounds
 from utils.sutils import innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2, gen_dist_func_nb
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 # para = False
 # try:
@@ -170,8 +175,10 @@ class HessianRefine(ASCriteria):
                     for k in range(self.dim):
                         hess[i][j,k] = Hh[symMatfromVec(j,k,self.dim)]
 
-            self.H = hess
-            self.Mc = mcs#/np.max(mcs)
+            # self.h = hess
+            # self.Mc = mcs
+            self.h = comm.allreduce(hess)
+            self.Mc = comm.allreduce(mcs)
 
     # Assumption is that the quadratic terms are the error
     def _evaluate(self, x, bounds, dir=0):
@@ -207,10 +214,11 @@ class HessianRefine(ASCriteria):
 
         fac = self.dV*Mc
         y_ = np.zeros(numeval)
+        cases = divide_cases(numeval, size)
         if self.energy_mode:
             y_ = np.zeros([numeval, self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            for k in cases[rank]:
             # for k in range(numeval):
-            for k in range(numeval):
             
                 work = X_cont[k,:] - trx
                 dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
@@ -222,7 +230,8 @@ class HessianRefine(ASCriteria):
                 y_[k] = numer/denom
 
         else: 
-            for k in range(numeval):
+            for k in cases[rank]:
+            # for k in range(numeval):
             # for k in prange(numeval):
 
                 work = X_cont[k,:] - trx
@@ -296,7 +305,9 @@ class HessianRefine(ASCriteria):
         
         y_ = np.zeros(numeval)
         dy_ = np.zeros([numeval, dim])
-        for k in range(numeval):
+        cases = divide_cases(numeval, size)
+        for k in cases[rank]:
+        # for k in range(numeval):
         # for k in prange(numeval):
 
             # for i in range(self.ntr):
@@ -321,6 +332,7 @@ class HessianRefine(ASCriteria):
 
         ans = np.einsum('i,ij->ij',-np.sign(y_), dy_)
 
+        #TODO: Parallelize this query as well?
         # for batches, loop over already added points to prevent clustering
         for i in range(dir):
             ind = self.ntr + i

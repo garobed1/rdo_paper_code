@@ -36,7 +36,7 @@ class EBMesh(om.IndepVarComp):
             pts2[3*i] = xpts[i]
         pts = np.append(pts, pts2)
 
-        self.add_output('x_struct0', distributed=True, val=pts, shape=pts.size, desc='structural node coordinates', tags=['mphys_coordinates'])
+        self.add_output('x_struct0', distributed=False, val=pts, shape=pts.size, desc='structural node coordinates', tags=['mphys_coordinates'])
 
 class EBSolver(om.ImplicitComponent):
     """
@@ -88,12 +88,12 @@ class EBSolver(om.ImplicitComponent):
         state_size = len(self.ans)
         # inputs
         self.add_input('dv_struct', distributed=False, shape=self.ndv, desc='tacs design variables', tags=['mphys_input'])
-        self.add_input('x_struct0', distributed=True, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
-        self.add_input('struct_force',  distributed=True, val=np.ones(self.npnt), desc='structural load vector', tags=['mphys_coupling'])
+        self.add_input('x_struct0', distributed=False, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
+        self.add_input('struct_force',  distributed=False, val=np.ones(self.npnt), desc='structural load vector', tags=['mphys_coupling'])
 
         # outputs
         # its important that we set this to zero since this displacement value is used for the first iteration of the aero
-        self.add_output('struct_states', distributed=True, shape=state_size, val = np.ones(state_size), desc='structural state vector', tags=['mphys_coupling'])
+        self.add_output('struct_states', distributed=False, shape=state_size, val = np.ones(state_size), desc='structural state vector', tags=['mphys_coupling'])
 
         # partials
         self.declare_partials('struct_states',['dv_struct','struct_force','struct_states'])
@@ -313,11 +313,11 @@ class EBForce(om.ExplicitComponent):
         self.solver = self.options["struct_objects"][1]
         solver = self.solver
 
-        self.add_input("f_struct", distributed=True, shape_by_conn=True, tags=["mphys_coupling"])
+        self.add_input("f_struct", distributed=False, shape_by_conn=True, tags=["mphys_coupling"])
 
         local_coord_size = solver.getMeshPoints().size
 
-        self.add_output("struct_force", distributed=True, shape=local_coord_size, val=np.zeros(local_coord_size), tags=["mphys_coupling"])
+        self.add_output("struct_force", distributed=False, shape=local_coord_size, val=np.zeros(local_coord_size), tags=["mphys_coupling"])
 
         self.declare_partials("*","*")
 
@@ -370,11 +370,11 @@ class EBDisp(om.ExplicitComponent):
         self.solver = self.options["struct_objects"][1]
         solver = self.solver
 
-        self.add_input("struct_states", distributed=True, shape_by_conn=True, tags=["mphys_coupling"])
+        self.add_input("struct_states", distributed=False, shape_by_conn=True, tags=["mphys_coupling"])
 
         local_coord_size = 2*solver.getMeshPoints().size*3
         #import pdb; pdb.set_trace()
-        self.add_output("u_struct", distributed=True, shape=local_coord_size, val=np.zeros(local_coord_size), tags=["mphys_coupling"])
+        self.add_output("u_struct", distributed=False, shape=local_coord_size, val=np.zeros(local_coord_size), tags=["mphys_coupling"])
 
         self.declare_partials("*","*")
 
@@ -440,8 +440,8 @@ class EBFunctions(om.ExplicitComponent):
         # OpenMDAO part of setup
         # TODO move the dv_struct to an external call where we add the DVs
         self.add_input('dv_struct', distributed=False, shape = self.ndv, desc='design variables', tags=['mphys_input'])
-        self.add_input('x_struct0', distributed=True, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
-        self.add_input('struct_states', distributed=True, shape_by_conn=True, desc='structural state vector', tags=['mphys_coupling'])
+        self.add_input('x_struct0', distributed=False, shape_by_conn=True, desc='structural node coordinates',tags=['mphys_coordinates'])
+        self.add_input('struct_states', distributed=False, shape_by_conn=True, desc='structural state vector', tags=['mphys_coupling'])
 
         # Remove the mass function from the func list if it is there
         # since it is not dependent on the structural state
@@ -456,7 +456,7 @@ class EBFunctions(om.ExplicitComponent):
                 ishape = self.beam_solver.Nelem + 1
             else:
                 ishape = 1
-            self.add_output(item, distributed=True, shape=ishape, tags=['mphys_result'])
+            self.add_output(item, distributed=False, shape=ishape, tags=['mphys_result'])
             # declare the partials
             self.declare_partials(item,['dv_struct','struct_states'])
 
@@ -473,7 +473,7 @@ class EBFunctions(om.ExplicitComponent):
                 ishape = self.beam_solver.Nelem + 1
             else:
                 ishape = 1
-            self.add_output(item, distributed=True, shape=ishape, tags=['mphys_result'])
+            self.add_output(item, distributed=False, shape=ishape, tags=['mphys_result'])
             # declare the partials
             self.declare_partials(item,['dv_struct','struct_states'])
     def _update_internal(self,inputs):
@@ -526,7 +526,7 @@ class EBMass(om.ExplicitComponent):
 
         # OpenMDAO part of setup
         self.add_input('dv_struct', distributed=False, shape=self.ndv, desc='design variables', tags=['mphys_input'])
-        self.add_input('x_struct0', distributed=True, shape_by_conn=True, desc='structural node coordinates', tags=['mphys_coordinates'])
+        self.add_input('x_struct0', distributed=False, shape_by_conn=True, desc='structural node coordinates', tags=['mphys_coordinates'])
         self.add_output('mass', val=0.0, distributed=False, desc = 'structural mass', tags=['mphys_result'])
         self.declare_partials('mass',['dv_struct'])
 
@@ -582,8 +582,17 @@ class Top(Multipoint):
         # ivc to keep the top level DVs
         dvs = self.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
        
-        dvs.add_output("f_struct", struct_options["force"])
+        # force format annoyance
+        fm = struct_options["force"].size
+        f0 = np.zeros(fm*6)
+        for i in range(fm):
+            f0[3*i+2] = struct_options["force"][i]
+
+        dvs.add_output("f_struct", f0)
         dvs.add_output("dv_struct_TRUE", struct_options["th_true"])
+
+        # thickness interp subsys
+        self.add_subsystem("dv_interp", beamDVComp(ndv = struct_options["ndv_true"], method='bsplines'))
 
         nonlinear_solver = om.NonlinearBlockGS(maxiter=2, iprint=2, use_aitken=True, rtol=1e-14, atol=1e-14)
         linear_solver = om.LinearBlockGS(maxiter=25, iprint=2, use_aitken=True, rtol=1e-14, atol=1e-14)
@@ -597,9 +606,6 @@ class Top(Multipoint):
             linear_solver,
         )
 
-        # thickness interp subsys
-        self.add_subsystem("dv_interp", beamDVComp(ndv = struct_options["ndv_true"], method='bsplines'))
-
         for discipline in ["struct"]:
             self.mphys_connect_scenario_coordinate_source("mesh_%s" % discipline, scenario, discipline)
 
@@ -611,7 +617,7 @@ class Top(Multipoint):
 
         self.connect("f_struct", f"test.f_struct")
         # self.connect("dv_struct", f"test.dv_struct")
-        self.connect("dv_struct_TRUE", "dv_interp.DVS")
+        # self.connect("dv_struct_TRUE", "dv_interp.DVS")
         self.connect("dv_interp.th", "test.dv_struct")
 
 
@@ -629,7 +635,7 @@ if __name__ == '__main__':
     problem_settings.nelem = nelem
     ndv_true = problem_settings.ndv_true
     problem_settings.structOptions["Nelem"] = nelem
-    problem_settings.structOptions["force"] = np.ones(6*(nelem+1))*1000000000.0
+    problem_settings.structOptions["force"] = np.ones((nelem+1))*10000.0
     problem_settings.structOptions["th"] = np.ones(nelem+1)*0.006
     problem_settings.structOptions['smax'] = 50.0
     # problem_settings.structOptions['smax'] = .20
@@ -638,6 +644,7 @@ if __name__ == '__main__':
     
 
     prob.model.add_design_var("dv_struct_TRUE")
+    prob.model.add_design_var("dv_interp.DVS")
     # prob.model.add_objective("test.struct_post.func_struct")
     # prob.model.add_objective("test.struct_post.stresscon")
 
@@ -645,8 +652,15 @@ if __name__ == '__main__':
     prob.setup(mode='rev')
     # om.n2(prob, show_browser=False, outfile="mphys_as_adflow_eb_%s_2pt.html")
     #prob.set_val("mach", 2.)
+    prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.006)
+    prob.run_model()
+    print(prob.get_val("test.mass"))
+    import pdb; pdb.set_trace()
+
     prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.0005)
     prob.run_model()
+    print(prob.get_val("test.mass"))
+    import pdb; pdb.set_trace()
     # f1 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
     # prob.set_val("dv_struct", np.ones(nelem+1)*0.001)
     # prob.run_model()
@@ -656,15 +670,14 @@ if __name__ == '__main__':
 
     print(prob.get_val("test.struct_states"))
     print(np.mean(prob.get_val("test.struct_states")))
-    import pdb; pdb.set_trace()
     #prob.model.approx_totals()
 
 
-    # prob.check_totals(step_calc='rel_avg')
+    # # prob.check_totals(step_calc='rel_avg')
 
-    prob.check_partials(step_calc = 'rel_avg', minimum_step = 1e-15) # settings are important since displacements are so small
-    print(prob.get_val('test.stress'))
-    print(prob.get_val('test.stresscon'))
+    # prob.check_partials(step_calc = 'rel_avg', minimum_step = 1e-15) # settings are important since displacements are so small
+    # print(prob.get_val('test.stress'))
+    # print(prob.get_val('test.stresscon'))
     # import pdb; pdb.set_trace()
     #prob.model.list_outputs()
 

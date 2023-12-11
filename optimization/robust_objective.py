@@ -10,7 +10,10 @@ from smt.utils.options_dictionary import OptionsDictionary
 from utils.sutils import convert_to_smt_grads
 
 # this one better suited for surrogate model
-
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 _poly_root_types = {
     "uniform": roots_legendre,
@@ -262,7 +265,12 @@ class RobustSampler():
         print(f"o       {self.options['name']} Iteration {self.iter_max}: Generating {N} new points for UQ evaluation")
         self.func = func
         self.model = model
-        tx = self._new_sample(N)
+
+        # parallelize
+        tx = None
+        if rank == 0:
+            tx = self._new_sample(N)
+        tx = comm.bcast(tx)
 
         # archive previous dataset
         self._internal_save_state(refine=False)
@@ -292,7 +300,13 @@ class RobustSampler():
         print(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
         self.func = func
         self.model = model
-        tx, log = self._refine_sample(N, e_tol=tol)
+    
+        tx = None
+        log = None
+        if rank == 0:
+            tx, log = self._refine_sample(N, e_tol=tol)
+        tx = comm.bcast(tx)
+        log = comm.bcast(log)
 
         # archive previous dataset
         self._internal_save_state(refine=True)
@@ -519,7 +533,7 @@ class CollocationSampler(RobustSampler):
             # import pdb; pdb.set_trace()
             # x = x*(self.scales[i]/2) + (0.5*self.scales[i] + xlimits[i,0])
             absc_nsc.append(x_nsc)
-            x = 0.5*(x_nsc + 1.)*self.scales[i] + xlimits[i,0]
+            x = 0.5*(x_nsc + 1.)*self.scales[self.x_u_ind[i]] + xlimits[self.x_u_ind[i],0]
             absc.append(x)
             weig.append(w)
             jumps[i] = self._recurse_total_points(i, self.N, 1)/self.N[i]
