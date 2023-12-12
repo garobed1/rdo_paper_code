@@ -89,7 +89,7 @@ xlimits_d = xlimits[sampler_t.x_d_ind]
 xlimits_u = xlimits[sampler_t.x_u_ind]
 
 
-func = ImpingingShock(input_bounds=xlimits, ndv=4, E=E, smax=smax, inputs=inputs, mesh=mesh)
+func = ImpingingShock(input_bounds=xlimits, ndv=ndv, E=E, smax=smax, inputs=inputs, mesh=mesh)
 
 # prob = om.Problem(comm=MPI.COMM_SELF)
 # try:

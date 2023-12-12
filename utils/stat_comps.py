@@ -2,7 +2,7 @@ import numpy as np
 from utils.sutils import convert_to_smt_grads
 import copy
 from mpi4py import MPI
-
+from math import ceil
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
@@ -24,7 +24,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #NOTE: REMEMBER TO CITE/MENTION THIS
 
     # split by dim/size
-    split = int(dim/size)
+    split = ceil(dim/size)
     
     arrs = np.array_split(tx, split)
     l1 = 0
@@ -71,7 +71,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     
     N_act = 1
 
-    split = int(dim/size)
+    split = ceil(dim/size)
     arrs = np.array_split(tx, split)
     l1 = 0
     l2 = 0
