@@ -52,7 +52,7 @@ s = 25. # shock angle
 M0 = 1.8 # upstream mach number
 smax = 5e5 # max stress constraint
 E = 69000000000
-ndv = 4
+ndv = 7
 eta_use = 1.0
 
 name = 'first_robust_attempt'
@@ -75,10 +75,10 @@ pdfs = pdfs + [['uniform'], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])
 xlimits[:ndv,0] = 0.0004
 xlimits[:ndv,1] = 0.007
-xlimits[4,0] = 23.
-xlimits[4,1] = 27.
-xlimits[5,0] = 1.5
-xlimits[5,1] = 1.9
+xlimits[ndv,0] = 23.
+xlimits[ndv,1] = 27.
+xlimits[ndv+1,0] = 1.5
+xlimits[ndv+1,1] = 1.9
 
 sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
             name='truth', 

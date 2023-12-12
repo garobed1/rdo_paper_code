@@ -13,7 +13,11 @@ size = comm.Get_size()
 def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, weights=None):
 
     dim = tx.shape[1]
-    
+    dim_u = 0
+    for j in range(dim):
+        if not isinstance(pdf_list[j], float):
+            dim_u += 1
+
     vals = np.zeros([N,1])
     dens = np.ones([N,1])
     summand = np.zeros([N,1])    
@@ -24,7 +28,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #NOTE: REMEMBER TO CITE/MENTION THIS
 
     # split by dim/size
-    split = ceil(dim/size)
+    split = ceil(dim_u/size)
     
     arrs = np.array_split(tx, split)
     l1 = 0
@@ -61,6 +65,10 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
 def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, tf, tg = None, weights=None):
 
     dim = tx.shape[1]
+    dim_u = 0
+    for j in range(dim):
+        if not isinstance(pdf_list[j], float):
+            dim_u += 1
     dim_d = len(static_list)
     
     grads = np.zeros([N,dim])
@@ -71,7 +79,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     
     N_act = 1
 
-    split = ceil(dim/size)
+    split = ceil(dim_u/size)
     arrs = np.array_split(tx, split)
     l1 = 0
     l2 = 0

@@ -181,6 +181,7 @@ class ImpingingShock(Problem):
                         self.prob.set_val(self.options["inputs"][j], x[i, 0:ndv])
                     else:
                         self.prob.set_val(self.options["inputs"][j], x[i, ndv+(j-1)])
+                import pdb; pdb.set_trace()
                 # for input in self.options['inputs']:
                 #     vsize = self.prob.get_val(input).size
                 #     self.prob.set_val(input, x[i, in_list])
