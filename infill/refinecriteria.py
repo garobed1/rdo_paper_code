@@ -16,6 +16,13 @@ from scipy.stats import qmc
 from utils.error import _gen_var_lists
 from utils.sutils import print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
 
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+
 """Base Class for Adaptive Sampling Criteria Functions"""
 class ASCriteria():
     def __init__(self, model, **kwargs):
@@ -144,7 +151,10 @@ class ASCriteria():
         xlimits_u = np.zeros([dim_u,2])
         xlimits_u[:,1] = 1.
         samp = LHS(xlimits = xlimits_u)
-        self.e_x = samp(5000*dim_u)
+        e_x = None
+        if rank == 0:
+            e_x = samp(5000*dim_u)
+        self.e_x = comm.bcast(e_x)
 
         self.initialize(self.model)
 
@@ -193,11 +203,15 @@ class ASCriteria():
         ### Multistart
         sampling = LHS(xlimits=bounds_r, criterion='m')
         ntries = self.options["multistart"]
-        if(ntries > 1):
-            xc_r = sampling(ntries)
-        else: 
-            xc_r = np.random.rand(dim_r)*(bounds_r[:,1] - bounds_r[:,0]) + bounds_r[:,0]
-            xc_r = np.array([xc_r])
+        
+        xc_r = None
+        if rank == 0:
+            if(ntries > 1):
+                xc_r = sampling(ntries)
+            else: 
+                xc_r = np.random.rand(dim_r)*(bounds_r[:,1] - bounds_r[:,0]) + bounds_r[:,0]
+                xc_r = np.array([xc_r])
+        xc_r = comm.bcast(xc_r)
 
         ### Batches
 

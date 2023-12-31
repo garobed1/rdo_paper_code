@@ -237,7 +237,7 @@ class OptSubproblem():
         # zk is initial condicition
         i = 0
         if MPI:
-            prob.comm.Bcast(zk, root=0)
+            zk = prob.comm.bcast(zk, root=0)
         
         for name, meta in prob.driver._designvars.items():
             size = meta['size']
@@ -258,6 +258,7 @@ class OptSubproblem():
 
             self.prob_model.model.trust.set_center(zk)
             self.prob_model.model.trust.set_radius(radius)
+            self.prob_model.comm.Barrier()
             self.prob_model.run_driver()
         
         # in this case, use an outside implementation of a trust subproblem
@@ -286,7 +287,7 @@ class OptSubproblem():
 
         i = 0
         if MPI:
-            prob.comm.Bcast(zk, root=0)
+            prob.comm.bcast(zk, root=0)
         
         for name, meta in prob.driver._designvars.items():
             size = meta['size']

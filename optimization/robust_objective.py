@@ -7,7 +7,7 @@ from smt.sampling_methods import LHS, Random
 from infill.getxnew import adaptivesampling
 from infill.refinement_picker import GetCriteria
 from smt.utils.options_dictionary import OptionsDictionary
-from utils.sutils import convert_to_smt_grads
+from utils.sutils import convert_to_smt_grads, print_mpi
 
 # this one better suited for surrogate model
 from mpi4py import MPI
@@ -161,11 +161,13 @@ class RobustSampler():
 
     def _new_sample(self, N):
         #TODO: options for this
-        u_tx = self.sampling(N)
-        tx = np.zeros([N, self.dim])
-        tx[:, self.x_u_ind] = u_tx
-        tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
-
+        tx = None
+        if rank == 0:
+            u_tx = self.sampling(N)
+            tx = np.zeros([N, self.dim])
+            tx[:, self.x_u_ind] = u_tx
+            tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
+        tx = comm.bcast(tx)
 
         return tx
 
@@ -175,10 +177,12 @@ class RobustSampler():
 
         # just produce new LHS
         newsize = N + tx.shape[0]
-        u_tx = self.sampling(newsize)
-        tx = np.zeros([newsize, self.dim])
-        tx[:, self.x_u_ind] = u_tx
-        tx[:, self.x_d_ind] = self.x_d_cur
+        if rank == 0:
+            u_tx = self.sampling(newsize)
+            tx = np.zeros([newsize, self.dim])
+            tx[:, self.x_u_ind] = u_tx
+            tx[:, self.x_d_ind] = self.x_d_cur
+        tx = comm.bcast(tx)
         # track matching points #TODO: standardize this
         # self.nested_ref_ind = range(tx.shape[0]).tolist()
         
@@ -219,9 +223,9 @@ class RobustSampler():
         
         x_d_buf = x_d_new
         ret = 0
-        print(f"o       {self.options['name']} Iteration {self.iter_max}: Design {x_d_buf}", end='')
+        print_mpi(f"o       {self.options['name']} Iteration {self.iter_max}: Design {x_d_buf}", end='')
         if np.allclose(x_d_buf, self.x_d_cur, rtol = 1e-15, atol = 1e-15):
-            print(f": No change in design, no data added")
+            print_mpi(f": No change in design, no data added")
             return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
         # import pdb; pdb.set_trace()
         if not self.options["external_only"]:
@@ -233,12 +237,12 @@ class RobustSampler():
                 self.current_samples['x'][:, self.x_d_ind] = x_d_buf
                 # self.x_samples[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]
                 self.has_points = True
-                print(f": Design is changed, retaining data from previous locations")
+                print_mpi(f": Design is changed, retaining data from previous locations")
             else:
-                print(f": Design is changed, ready to add new data")
+                print_mpi(f": Design is changed, ready to add new data")
             ret = 1
         else:
-            print(f": Design is changed, but no data added")
+            print_mpi(f": Design is changed, but no data added")
             ret = 0
         self.x_d_cur = x_d_buf
         return ret # indicates that we have not moved, useful for gradient evals, avoiding retraining
@@ -259,18 +263,17 @@ class RobustSampler():
         """
         # check if we already have them
         if self.has_points:
-            print(f"o       {self.options['name']} Iteration {self.iter_max}: Already have points, no points generated")
+            print_mpi(f"o       {self.options['name']} Iteration {self.iter_max}: Already have points, no points generated")
             return 0
 
-        print(f"o       {self.options['name']} Iteration {self.iter_max}: Generating {N} new points for UQ evaluation")
+        print_mpi(f"o       {self.options['name']} Iteration {self.iter_max}: Generating {N} new points for UQ evaluation")
         self.func = func
         self.model = model
 
         # parallelize
         tx = None
-        if rank == 0:
-            tx = self._new_sample(N)
-        tx = comm.bcast(tx)
+        tx = self._new_sample(N)
+        
 
         # archive previous dataset
         self._internal_save_state(refine=False)
@@ -292,21 +295,19 @@ class RobustSampler():
         """
         # check if we already have them NOTE: EVEN IF A DIFFERENT NUMBER IS REQUESTED FOR NOW
         if self.has_points and N is None:
-            print(f"{self.options['name']} Iter {self.iter_max}: No refinement requested, no points generated")
+            print_mpi(f"{self.options['name']} Iter {self.iter_max}: No refinement requested, no points generated")
             return 0
 
         told = self.current_samples['x'].shape[0]
 
-        print(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
+        print_mpi(f"o       {self.options['name']} Iteration {self.iter_max}: Refining {N} new points for UQ evaluation")
         self.func = func
         self.model = model
     
         tx = None
         log = None
-        if rank == 0:
-            tx, log = self._refine_sample(N, e_tol=tol)
-        tx = comm.bcast(tx)
-        log = comm.bcast(log)
+        # if rank == 0:
+        tx, log = self._refine_sample(N, e_tol=tol)
 
         # archive previous dataset
         self._internal_save_state(refine=True)
@@ -398,7 +399,7 @@ class RobustSampler():
 
             self.stop_generating = False
         else:
-            print(f"{self.options['name']} Iter {self.iter_max}: Adding points without replacing not implemented!")
+            print_mpi(f"{self.options['name']} Iter {self.iter_max}: Adding points without replacing not implemented!")
 
 
 
@@ -590,7 +591,7 @@ class CollocationSampler(RobustSampler):
                     self.u_tx[super_ind][j] = absc[j][si[j]]
                     self.weights[super_ind] *= weig[j][si[j]]
                 except:
-                    print("SC Recursion Failure!")
+                    print_mpi("SC Recursion Failure!")
                     import pdb; pdb.set_trace()
 
             si[di] += 1
@@ -677,7 +678,10 @@ class AdaptiveSampler(RobustSampler):
         if self.model is not None:
             u_tx, dummy = self._refine_sample(N)
         else:
-            u_tx = self.sampling(N)
+            u_tx = None
+            if rank == 0:
+                u_tx = self.sampling(N)
+            u_tx = comm.bcast(u_tx)
         
         
         tx = np.zeros([N, self.dim])
@@ -748,7 +752,10 @@ class AdaptiveSampler(RobustSampler):
                 g0 = convert_to_smt_grads(mf)
 
                 # add points
-                tx_mc = self.sampling_mc(N_mc)
+                tx_mc = None
+                if rank == 0:
+                    tx_mc = self.sampling_mc(N_mc)
+                tx_mc = comm.bcast(tx_mc)
                 xnew = rF.post_asopt(tx_mc, bounds)
                 t0 = np.append(t0, xnew, axis=0)
                 f0 = np.append(f0, self.func(xnew), axis=0)
@@ -767,7 +774,7 @@ class AdaptiveSampler(RobustSampler):
 
                 d3 = np.append(d3, np.array([[en, e_tol_p, N_added]]), axis=0)
                 converged = d3[-1,0] < d3[-1,1]
-                print(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")
+                print_mpi(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")
                 c += 1
 
 

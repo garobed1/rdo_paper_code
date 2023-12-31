@@ -8,7 +8,7 @@ from surrogate.direct_gek import DGEK
 from scipy.stats import qmc
 from surrogate.pougrad import POUSurrogate
 from utils.error import rmse, meane, full_error
-from utils.sutils import convert_to_smt_grads
+from utils.sutils import convert_to_smt_grads, print_mpi
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -73,7 +73,6 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
 
         dy = rcrit.eval_grad(x_eff, bounds, dir)
         return dy[0,sub_ind]
-
 
     # loop over batch
     for i in range(batch):
@@ -174,18 +173,18 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
         tol_func = True
     tol_met = False
 
-    if(rcrit.options["print_iter"] and rank == 0):
-        print(f"___________________________________________________________________________")
-        print(f"O       Begin Adaptive Sampling")
-        print(f"O       Criteria = {rcrit.name}| Function = {func.options['name']} | Model = {model0.name}")
-        print(f"O       Added Points = {ntr} | Batch Size = {batch} | ", end='')
+    if(rcrit.options["print_iter"]):
+        print_mpi(f"___________________________________________________________________________")
+        print_mpi(f"O       Begin Adaptive Sampling")
+        print_mpi(f"O       Criteria = {rcrit.name}| Function = {func.options['name']} | Model = {model0.name}")
+        print_mpi(f"O       Added Points = {ntr} | Batch Size = {batch} | ", end='')
         if tol_condition and not tol_func:
-            print(f"Max Steps = {count} | Target = {e_tol}")
+            print_mpi(f"Max Steps = {count} | Target = {e_tol}")
         elif tol_condition and  tol_func:
-            print(f"Max Steps = {count} | Target = {e_tol(model)}")
+            print_mpi(f"Max Steps = {count} | Target = {e_tol(model)}")
         else:
-            print(f"Steps = {count}")
-        print(f"___________________________________________________________________________")
+            print_mpi(f"Steps = {count}")
+        print_mpi(f"___________________________________________________________________________")
     # index batch sizes
     batch_use = count*[batch]
     rem = ntr % batch
@@ -259,14 +258,14 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                 else:
                     e_tol_p = e_tol
                 en_etol.append([en, e_tol_p, added])
-            if(rcrit.options["print_iter"] and rank == 0):
-                print(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
+            if(rcrit.options["print_iter"]):
+                print_mpi(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
                 if tol_condition:
-                    print(f", Energy = {en}, Target = {e_tol_p}")
+                    print_mpi(f", Energy = {en}, Target = {e_tol_p}")
                 elif rcrit.options["print_energy"]:
-                    print(f", Energy = {en}")
+                    print_mpi(f", Energy = {en}")
                 else:
-                    print('')
+                    print_mpi('')
             # replace criteria
 
             # convergence check
@@ -277,11 +276,11 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
         #     print(f"Run on processor {rank} failed, returning what we have")
         #     continue
     if tol_condition and tol_met:
-        print(f"O       Adaptive Sampling Complete, Tolerance Achieved with {added} Points Added")
+        print_mpi(f"O       Adaptive Sampling Complete, Tolerance Achieved with {added} Points Added")
     elif tol_condition and not tol_met:
-        print(f"O       Adaptive Sampling Complete, Tolerance Not Achieved with {added} Points Added")
+        print_mpi(f"O       Adaptive Sampling Complete, Tolerance Not Achieved with {added} Points Added")
     else: 
-        print(f"O       Adaptive Sampling Complete, {added} Points Added")
+        print_mpi(f"O       Adaptive Sampling Complete, {added} Points Added")
 
 
 

@@ -6,6 +6,7 @@ from optimization.optimizers import optimize
 from optimization.robust_objective import RobustSampler
 from optimization.opt_subproblem import OptSubproblem
 from utils.om_utils import get_om_design_size, om_dict_to_flat_array, grad_opt_feas
+from utils.sutils import print_mpi
 from optimization.trust_bound_comp import TrustBound
 from collections import OrderedDict
 
@@ -332,37 +333,37 @@ class UncertainTrust(OptSubproblem):
         self.loc.append(zk)
 
 
-        print(f"___________________________________________________________________________")
-        print(f"Optimization Parameters")
-        print(f"Gradient Tolerance         = {self.gtol}")
-        print(f"Step Tolerance             = {stol}")
-        print(f"Maximum Outer Iterations   = {miter}")
-        print(f"Initial Trust Radius       = {initial_trust_radius}")
-        print(f"Number of Design Variables = {dvsize}")
-        print(f"Number of UQ Variables     = {self.prob_model.model.stat.sampler.x_u_dim}")
+        print_mpi(f"___________________________________________________________________________")
+        print_mpi(f"Optimization Parameters")
+        print_mpi(f"Gradient Tolerance         = {self.gtol}")
+        print_mpi(f"Step Tolerance             = {stol}")
+        print_mpi(f"Maximum Outer Iterations   = {miter}")
+        print_mpi(f"Initial Trust Radius       = {initial_trust_radius}")
+        print_mpi(f"Number of Design Variables = {dvsize}")
+        print_mpi(f"Number of UQ Variables     = {self.prob_model.model.stat.sampler.x_u_dim}")
 
 
-        print(f"___________________________________________________________________________")
-        print(f"Beginning Full Optimization-Under-Uncertainty Loop")
+        print_mpi(f"___________________________________________________________________________")
+        print_mpi(f"Beginning Full Optimization-Under-Uncertainty Loop")
 
         while (self.gerr > self.gtol) and (k < miter):
             fail = 0
             if self.options["print"]:
-                print("\n")
-                print(f"Outer Iteration {k} ")
-                print(f"Trust Region {tsteps} ")
-                print(f"-------------------")
-                print(f"    OBJ ERR: {fetext}")
+                print_mpi("\n")
+                print_mpi(f"Outer Iteration {k} ")
+                print_mpi(f"Trust Region {tsteps} ")
+                print_mpi(f"-------------------")
+                print_mpi(f"    OBJ ERR: {fetext}")
                 # Add constraint loop as well
-                print(f"    -")
-                print(f"    GRD ERR: {getext}")
-                print(f"    Fidelity: {self.reflevel[-1]}")
+                print_mpi(f"    -")
+                print_mpi(f"    GRD ERR: {getext}")
+                print_mpi(f"    Fidelity: {self.reflevel[-1]}")
                 
                 self.prob_model.list_problem_vars()
             
-                print(f"___________________________________________________________________________")
-                print(f"")
-                print(f"OOO     Step 1: Solving subproblem...")
+                print_mpi(f"___________________________________________________________________________")
+                print_mpi(f"")
+                print_mpi(f"OOO     Step 1: Solving subproblem...")
             # =================================================================
             # 1.
             #   find a solution to the subproblem
@@ -425,7 +426,7 @@ class UncertainTrust(OptSubproblem):
             self.sdist = np.linalg.norm(s)
             self.sdist_sc = np.linalg.norm(s_sc)
             if self.options["print"]:
-                print(f"o       Step Size = {self.sdist}, Relative = {self.sdist_sc}, Step Tol = {stol}")
+                print_mpi(f"o       Step Size = {self.sdist}, Relative = {self.sdist_sc}, Step Tol = {stol}")
             
             # If the predicted step size is small enough
             if self.sdist_sc < stol and gfeam < self.ctol:
@@ -436,9 +437,9 @@ class UncertainTrust(OptSubproblem):
             if self.options["model_grad_err_est"]:
                 # Compare to refined model
                 if self.options["print"]:
-                    print(f"___________________________________________________________________________")
-                    print(f"")
-                    print(f"OOO     Step 2: Validating by Refining Model...")
+                    print_mpi(f"___________________________________________________________________________")
+                    print_mpi(f"")
+                    print_mpi(f"OOO     Step 2: Validating by Refining Model...")
                 
                 # Estimate the inexact gradient condition now rather than later
                 # lhs0 = lhs = self.prob_model.model.stat.sampler.rcrit.get_energy()#np.linalg.norm(gmod-gtru)
@@ -455,6 +456,7 @@ class UncertainTrust(OptSubproblem):
                     succ = 0
                     break
 
+
                 # recompute model
                 self.prob_model.run_model()
                 fmod_cand_star = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
@@ -465,9 +467,9 @@ class UncertainTrust(OptSubproblem):
             else:
                 #Eval Truth
                 if self.options["print"]:
-                    print(f"___________________________________________________________________________")
-                    print(f"")
-                    print(f"OOO     Step 2: Validating by Computing Truth...")
+                    print_mpi(f"___________________________________________________________________________")
+                    print_mpi(f"")
+                    print_mpi(f"OOO     Step 2: Validating by Computing Truth...")
 
                 ftru_cent = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
                 self._eval_truth(zk_cand)
@@ -483,9 +485,9 @@ class UncertainTrust(OptSubproblem):
             # =================================================================
             
             if self.options["print"]:
-                print(f"___________________________________________________________________________")
-                print(f"")
-                print(f"OOO     Step 3: Validating Subproblem Reduction with Truth...")
+                print_mpi(f"___________________________________________________________________________")
+                print_mpi(f"")
+                print_mpi(f"OOO     Step 3: Validating Subproblem Reduction with Truth...")
             
             
             
@@ -521,10 +523,10 @@ class UncertainTrust(OptSubproblem):
             # =================================================================
             
             if self.options["print"]:
-                print(f"___________________________________________________________________________")
-                print(f"")
-                print(f"OOO     Step 4: Modifying Trust Bounds...")
-                print(f"O       Prior Radius = {trust_radius}")
+                print_mpi(f"___________________________________________________________________________")
+                print_mpi(f"")
+                print_mpi(f"OOO     Step 4: Modifying Trust Bounds...")
+                print_mpi(f"O       Prior Radius = {trust_radius}")
             
             # a few ways of doing this
             # bad prediction, reduce radius to fraction of candidate distance
@@ -536,7 +538,7 @@ class UncertainTrust(OptSubproblem):
             elif eta_k_act < eta_1:
                 trust_radius = gamma_1*trust_radius
                 if self.options["print"]:
-                    print(f"O       eta = {eta_k_act} < {eta_1}, Reducing")
+                    print_mpi(f"O       eta = {eta_k_act} < {eta_1}, Reducing")
             elif eta_k_act > eta_2:
                 # check if trust constraint is active AKA we are on the boundary
                 if self.trust_opt == 1:
@@ -550,13 +552,13 @@ class UncertainTrust(OptSubproblem):
                     trust_radius = gamma_2*trust_radius
 
                 if self.options["print"]:
-                    print(f"O       eta = {eta_k_act} > {eta_2}, Increasing")
+                    print_mpi(f"O       eta = {eta_k_act} > {eta_2}, Increasing")
             else:
                 if self.options["print"]:
-                    print(f"O       eta = {eta_k_act} < {eta_2}, > {eta_1}, Not Changing")
+                    print_mpi(f"O       eta = {eta_k_act} < {eta_2}, > {eta_1}, Not Changing")
 
             if self.options["print"]:
-                print(f"O       New Radius = {trust_radius}")
+                print_mpi(f"O       New Radius = {trust_radius}")
 
             if self.trust_opt == 1:
                 self.prob_model.model.trust.set_radius(trust_radius)
@@ -613,13 +615,12 @@ class UncertainTrust(OptSubproblem):
             # if we used the "truth" function to check refinement, we need to do this step now
             if not self.options["model_grad_err_est"]:
                 if self.options["print"]:
-                    print(f"___________________________________________________________________________")
-                    print(f"")
-                    print(f"OOO     Step 5: Refining to Meet Inexact Gradient Conditions...")
+                    print_mpi(f"___________________________________________________________________________")
+                    print_mpi(f"")
+                    print_mpi(f"OOO     Step 5: Refining to Meet Inexact Gradient Conditions...")
             
             
                 lhs, rhs = self.model_refiner()
-
             # store important stuff for plotting
             k += 1            
             self.outer_iter = k
@@ -632,10 +633,10 @@ class UncertainTrust(OptSubproblem):
             self.loc.append( om_dict_to_flat_array(zk, dvsettings, dvsize))
             if self.prob_model.model.stat.surrogate is not None:
                 self.models.append(self.prob_model.model.stat.surrogate)
-            print(f"O       Radius: {trust_radius}")
-            print(f"O       LHS: {lhs}")
-            print(f"O       RHS: {rhs}")
-            print(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
+            print_mpi(f"O       Radius: {trust_radius}")
+            print_mpi(f"O       LHS: {lhs}")
+            print_mpi(f"O       RHS: {rhs}")
+            print_mpi(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
             # 
 
         if k >= miter:
@@ -673,18 +674,18 @@ class UncertainTrust(OptSubproblem):
         if self.prob_model.model.stat.surrogate is not None:
             self.models.append(self.prob_model.model.stat.surrogate)
 
-        print("\n")
-        print(f"Optimization terminated {message}")
-        print(f"-------------------")
-        print(f"    Outer Iterations: {self.outer_iter}")
+        print_mpi("\n")
+        print_mpi(f"Optimization terminated {message}")
+        print_mpi(f"-------------------")
+        print_mpi(f"    Outer Iterations: {self.outer_iter}")
         # Add constraint loop as well
-        print(f"    -")
-        print(f"    Final design vars: {zk}")
-        print(f"    Final objective: {ftru}")
-        print(f"    Final truth gradient norm: {getext}")
-        print(f"    Final model gradient norm: {self.gerr}")
-        print(f"    Final model error: {fetext}")
-        print(f"    Final model level: {self.reflevel[-1]}")
+        print_mpi(f"    -")
+        print_mpi(f"    Final design vars: {zk}")
+        print_mpi(f"    Final robust quant: {ftru}")
+        print_mpi(f"    Final truth gradient norm: {getext}")
+        print_mpi(f"    Final model gradient norm: {self.gerr}")
+        print_mpi(f"    Final model error: {fetext}")
+        print_mpi(f"    Final model level: {self.reflevel[-1]}")
 
         # print(f"    Total model samples: {self.model_iters}")
         # print(f"    Total truth samples: {self.truth_iters}")
@@ -711,9 +712,9 @@ class UncertainTrust(OptSubproblem):
             refjump = rmin + max(0, int(fac*rcap))
             self.reflevel.append(refjump)
             if self.options["print"]:
-                print(f"O       Strategy = Proximity to Convergence")
-                print(f"O       Relative Proximity = {gclose}| Minimum Refinement = {rmin}")
-                print(f"O       Current Level = {self.reflevel[-1]}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
+                print_mpi(f"O       Strategy = Proximity to Convergence")
+                print_mpi(f"O       Relative Proximity = {gclose}| Minimum Refinement = {rmin}")
+                print_mpi(f"O       Current Level = {self.reflevel[-1]}/{rcap}| Jump = {refjump}| New Level = {reflevel+refjump}/{rcap}")
             # 
 
 
@@ -732,8 +733,8 @@ class UncertainTrust(OptSubproblem):
             rcap = self.prob_truth.model.stat.get_fidelity()
             # rcap = self.options["ref_cap"]
             if self.options["print"]:
-                print(f"O       Strategy = Satisfy Inexact Gradient Condition")
-                print(f"O       Minimum Refinement = {rmin}| xi = {self.xi}")
+                print_mpi(f"O       Strategy = Satisfy Inexact Gradient Condition")
+                print_mpi(f"O       Minimum Refinement = {rmin}| xi = {self.xi}")
             rk = 0
             if lhs == None:
                 lhs = 1.e6
@@ -793,12 +794,12 @@ class UncertainTrust(OptSubproblem):
                 rhs = min(gerrm, self.sdist)
 
                 if self.options["print"]:
-                    print(f"o       Inexact Iter: {rk} | Energy = {estat}| Levels = {self.reflevel}| LHS = {lhs}| RHS: {rhs} | xi*RHS - LHS = {rhs*self.xi - lhs}")
+                    print_mpi(f"o       Inexact Iter: {rk} | Energy = {estat}| Levels = {self.reflevel}| LHS = {lhs}| RHS: {rhs} | xi*RHS - LHS = {rhs*self.xi - lhs}")
             if self.options["print"]:
                 if lhs < self.xi*rhs:
-                    print(f"o       Inexact Gradient Condition Satisfied in {rk} Iterations with {refjump} Points")
+                    print_mpi(f"o       Inexact Gradient Condition Satisfied in {rk} Iterations with {refjump} Points")
                 else:
-                    print(f"o       Max Iterations Reached before Satisfaction, Continue with {refjump} Points")
+                    print_mpi(f"o       Max Iterations Reached before Satisfaction, Continue with {refjump} Points")
 
         else:
 
@@ -815,8 +816,8 @@ class UncertainTrust(OptSubproblem):
             # else:
 
             if self.options["print"]:
-                print(f"O       Strategy = Flat Refinement")
-                print(f"O       Current Level = {self.reflevel[-1]}/{rcap}| Jump = {refjump}| New Level = {self.reflevel+refjump}/{rcap}")
+                print_mpi(f"O       Strategy = Flat Refinement")
+                print_mpi(f"O       Current Level = {self.reflevel[-1]}/{rcap}| Jump = {refjump}| New Level = {self.reflevel+refjump}/{rcap}")
             refjump, reflog = self.prob_model.model.stat.refine_model(refjump)
             self.reflevel.append(refjump)
 

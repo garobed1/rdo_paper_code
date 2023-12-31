@@ -9,6 +9,12 @@ from smt.sampling_methods import LHS
 from smt.surrogate_models.surrogate_model import SurrogateModel as SMT_SM
 from smt.problems.problem import Problem as SMT_PB
 
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+
 para = False
 try:
     from numba import jit, njit, prange
@@ -841,3 +847,9 @@ def print_rc_plots(bounds, name, obj, dir=0):
         # plt.savefig(f"{name}_err_2d.pdf", bbox_inches="tight")
         # plt.clf()
         import pdb; pdb.set_trace()
+
+
+
+def print_mpi(*args, **kwargs):
+    if rank == 0:
+        print(*args, **kwargs)

@@ -38,6 +38,19 @@ osetfile = args.optfile
 ssetfile = args.samplingfile
 
 
+
+
+
+
+
+
+
+
+
+
+############################
+#### SCRIPT BEGINS HERE ####
+############################
 # import settings from given config files
 root = os.getcwd()
 # optimization imports
@@ -69,18 +82,6 @@ if rank == 0:
 
 
 
-
-
-
-
-
-
-
-
-
-############################
-#### SCRIPT BEGINS HERE ####
-############################
 name = oset.name
 print_plots = oset.print_plots
 
@@ -130,11 +131,12 @@ trust_increase_terminate = oset.trust_increase_terminate
 xi = oset.xi
 
 ### SAMPLING STRATEGY ###
-sample_type = oset.sample_type
+sample_type_t = oset.sample_type_t
+sample_type_m = oset.sample_type
 
 ### TRUTH SAMPLERS ###
 N_t = oset.N_t
-if(sample_type == 'SC'):
+if(sample_type_t == 'SC'):
     jump = oset.scjump
     N_t = oset.scN_t
     approximate_truth_max = oset.sc_approximate_truth_max
@@ -199,7 +201,7 @@ except:
 
 ### MODEL SAMPLERS ###
 N_m = oset.N_m
-if(sample_type == 'SC'):
+if(sample_type_m == 'SC'):
     jump = oset.scjump
     N_m = oset.scN_m
     sampler_m = CollocationSampler(np.array([x_init]), N=N_m, 
@@ -207,7 +209,7 @@ if(sample_type == 'SC'):
                           xlimits=xlimits, 
                           probability_functions=pdfs,
                           external_only=external_only)
-elif(sample_type == 'Adaptive'):
+elif(sample_type_m == 'Adaptive'):
     sampler_m = AdaptiveSampler(np.array([x_init]), N=N_m, 
                           name='model', 
                           criteria=sset, #give it the whole settings object
@@ -226,9 +228,7 @@ else:
                           external_only=external_only)
 
 
-### NOTE NOTE NOTE ###
-### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
-excomp = om.ExecComp('y = x*0.2')
+
 
 
 ### TRUTH OPENMDAO SETUP ###
@@ -245,12 +245,19 @@ probt.model.add_subsystem("stat",
                                   func=func,
                                   name=name))
 # doesn't need a driver
-probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
+try:
+    import pyoptsparse
+    probt.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+except:
+    probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 probt.driver.opt_settings = opt_settings
-probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
+### NOTE NOTE NOTE ###
+### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
+excomp = om.ExecComp('y = x*0.2')
+
 if p_con:
     probt.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
     probt.model.add_subsystem('comp_obj', excomp)
@@ -320,10 +327,12 @@ probm.model.add_subsystem("stat", StatCompComponent(sampler=sampler_m,
                                  full_space=full_surrogate,
                                  name=name,
                                  print_surr_plots=print_plots))
-# probm.driver = om.pyOptSparseDriver(optimizer='PSQP') #Default: SLSQP
-# probm.driver.opt_settings = opt_settings
-probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
-# probm.driver = om.ScipyOptimizeDriver(optimizer='CG') 
+try:
+    import pyoptsparse
+    probm.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+except:
+    probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
+probm.driver.opt_settings = opt_settings
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 if p_con:
@@ -384,6 +393,22 @@ sub_optimizer.prob_truth.run_model()
 sub_optimizer.prob_model.run_model()
 
 
+### INITIALIZE RECORDERS ###
+
+rec_t = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_truth.sql')
+rec_m = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_model.sql')
+sub_optimizer.prob_truth.add_recorder(rec_t)
+sub_optimizer.prob_model.add_recorder(rec_m)
+sub_optimizer.prob_truth.driver.recording_options['record_inputs'] = True
+sub_optimizer.prob_truth.driver.recording_options['record_outputs'] = True
+sub_optimizer.prob_truth.driver.recording_options['record_residuals'] = True
+sub_optimizer.prob_truth.driver.recording_options['record_derivatives'] = True
+sub_optimizer.prob_model.driver.recording_options['record_inputs'] = True
+sub_optimizer.prob_model.driver.recording_options['record_outputs'] = True
+sub_optimizer.prob_model.driver.recording_options['record_residuals'] = True
+sub_optimizer.prob_model.driver.recording_options['record_derivatives'] = True
+
+
 ### PERFORM OPTIMIZATION
 succ, fail = sub_optimizer.solve_full()
 ### PERFORM OPTIMIZATION
@@ -416,8 +441,8 @@ if rank == 0:
         pickle.dump(sub_optimizer.reflog, f)
     with open(f'/{root}/{path}/{title}/prob_truth.pickle', 'wb') as f:
         pickle.dump(sub_optimizer.prob_truth.model.stat.sampler, f)
-    with open(f'/{root}/{path}/{title}/prob_model.pickle', 'wb') as f:
-        pickle.dump(sub_optimizer.prob_model.model.stat.sampler, f)
+    with open(f'/{root}/{path}/{title}/prob_model_history.pickle', 'wb') as f:
+        pickle.dump(sub_optimizer.prob_model.model.stat.sampler.history, f)
 
 
 # ### CONVERGENCE PLOTS ###

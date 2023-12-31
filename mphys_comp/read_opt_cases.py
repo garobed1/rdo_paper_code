@@ -39,9 +39,14 @@ for reader in cr:
     # Get driver cases (do not recurse to system/solver cases)
     driver_cases = reader.get_cases('driver', recurse=False)    
     for case in driver_cases:
-        dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
-        obj_values.append(case.get_objectives()['test.mass'])
-        con_values.append(case.get_constraints()['test.stresscon'])
+        
+        # dv_values.append(case.get_design_vars()['dv_struct_TRUE'][1])
+        dv_values.append(case.get_design_vars()['x_d'][1])
+        # obj_values.append(case.get_objectives()['test.mass'])
+        obj_values.append(case.get_objectives()['mass_only.test.mass'])
+        # con_values.append(case.get_constraints()['test.stresscon'])
+        con_values.append(case.get_constraints()['stat.musigma'])
+
 # import pdb; pdb.set_trace()
 # import pdb; pdb.set_trace()
 fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
@@ -72,8 +77,12 @@ from beam.om_beamdvs import beamDVComp
 import copy
 fig, (ax1) = plt.subplots(1, 1)
 fig.set_size_inches(12, 6)
-dv_init = cr[0].get_cases('driver', recurse=False)[0].get_design_vars()['dv_struct_TRUE']
-dv_final = case.get_design_vars()['dv_struct_TRUE']
+
+# dv_init = cr[0].get_cases('driver', recurse=False)[0].get_design_vars()['dv_struct_TRUE']
+dv_init = cr[0].get_cases('driver', recurse=False)[0].get_design_vars()['x_d']
+# dv_final = case.get_design_vars()['dv_struct_TRUE']
+dv_final = case.get_design_vars()['x_d']
+
 # import pdb; pdb.set_trace()
 ndv = dv_final.size
 dvprob = om.Problem()
@@ -87,10 +96,10 @@ dvprob.set_val('dvcomp.DVS', dv_init)
 dvprob.run_model()
 th_init = copy.deepcopy(dvprob.get_val('sink.y'))
 
-plt.plot(x, th_init/2., 'k-')
-plt.plot(x, -th_init/2., 'k-')
-plt.plot(x, th_final/2., 'r-')
-plt.plot(x, -th_final/2., 'r-')
+plt.plot(x, np.zeros(th_init.shape[0]), 'k-')
+plt.plot(x, -th_init, 'k-')
+# plt.plot(x, th_final/2., 'r-')
+plt.plot(x, -th_final, 'r-')
 plt.grid()
 plt.xlabel(rf'$s$')
 plt.ylabel(rf'$y$')

@@ -12,7 +12,7 @@ from scipy.stats import qmc
 from scipy.spatial import KDTree
 from scipy.spatial.distance import pdist, cdist, squareform
 # from scipy.optimize import Bounds
-from utils.sutils import innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2, gen_dist_func_nb
+from utils.sutils import divide_cases, innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2, gen_dist_func_nb
 from mpi4py import MPI
 
 comm = MPI.COMM_WORLD
@@ -245,6 +245,7 @@ class HessianRefine(ASCriteria):
 
         # y_ = pou_crit_loop(X_cont, D, trx, fac, mindist, delta, self.energy_mode, self.higher_terms, self.H, self.rho)
         
+        y_ = comm.allreduce(y_)
         ans = -abs(y_)
 
 
@@ -330,6 +331,9 @@ class HessianRefine(ASCriteria):
             y_[k] = numer/denom
             dy_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
 
+
+        y_ = comm.allreduce(y_)
+        dy_ = comm.allreduce(dy_)
         ans = np.einsum('i,ij->ij',-np.sign(y_), dy_)
 
         #TODO: Parallelize this query as well?

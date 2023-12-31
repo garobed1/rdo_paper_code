@@ -57,7 +57,7 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
     A = (sum(dens)/N_act)*(area)
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     return (mean, stdev), vals
 
 
@@ -69,6 +69,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     for j in range(dim):
         if not isinstance(pdf_list[j], float):
             dim_u += 1
+
     dim_d = len(static_list)
     
     grads = np.zeros([N,dim])

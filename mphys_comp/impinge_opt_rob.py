@@ -1,4 +1,3 @@
-import imp
 import numpy as np
 import argparse
 from mpi4py import MPI
@@ -7,29 +6,9 @@ import matplotlib.pyplot as plt
 import openmdao.api as om
 
 from functions.shock_problem import ImpingingShock
-from mphys import Multipoint
-from mphys_comp.shock_angle_comp import ShockAngleComp
-from mphys_comp.inflow_comp import InflowComp
-from mphys_comp.impinge_analysis import Top
 from beam.mphys_eb import Top as Top_EB
-from mphys.scenario_aerostructural import ScenarioAeroStructural
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from uq_comp.stat_comp_comp import StatCompComponent
-# these imports will be from the respective codes' repos rather than mphys
-from mphys.mphys_adflow import ADflowBuilder
-from beam.mphys_eb import EBBuilder, EBMass
-from beam.mphys_onetoone import OTOBuilder
-from beam.om_beamdvs import beamDVComp
-
-#from mphys.mphys_meld import MeldBuilder
-#from mphys.mphys_rlt import RltBuilder
-
-from baseclasses import AeroProblem
-
-# from tacs import elements, constitutive, functions
-
-# contains all options, aero, opt, struct, uq, warp
-import mphys_comp.impinge_setup as default_impinge_setup
 
 # set these for convenience
 comm = MPI.COMM_WORLD
@@ -177,7 +156,7 @@ probt.setup()
 # prob.model.add_design_var("P0")
 
 
-title = f'{name}_ndv{ndv}_smax{smax}_E{E}.sql'
+title = f'{name}_ndv{ndv}_smax{smax}_E{E}_eta{eta_use}.sql'
 # get_last_case = False
 # i = 0
 # while os.path.isfile(title):

@@ -71,7 +71,10 @@ else:
 # N_t = 500*u_dim
 N_m = 6
 jump = 10
+# model sampling
 sample_type = 'Adaptive'
+# truth sampling
+sample_type_t = 'Normal'
 
 ##### Collocation UQ Parameters #####
 sc_approximate_truth_max = 48

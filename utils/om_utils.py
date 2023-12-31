@@ -668,8 +668,8 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         grad = problem.compute_totals(return_format='array')
         opt = np.linalg.norm(grad, np.inf)
         feas = 0.0
-        import pdb; pdb.set_trace()
-        return grad, opt, feas
+        duals = []
+        return grad, opt, feas, duals
     
     driver = problem.driver
     model = problem.model
@@ -705,7 +705,8 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
 
     feas = 0.0
     if len(duals) > 0:
-        penalty = 2.*abs(max(duals.values(), key=abs))
+        d_list = [value for values in duals.values() for value in values]
+        penalty = 2.*abs(max(d_list, key=abs))
         feas = l1_merit_function2(driver, penalty, feas_tol)
     # import pdb; pdb.set_trace()
     #NOTE: replace totals with lagrangian grad?

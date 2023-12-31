@@ -1,13 +1,19 @@
 import numpy as np
 import openmdao.api as om
 from utils.error import stat_comp
-from utils.sutils import convert_to_smt_grads
+from utils.sutils import convert_to_smt_grads, print_mpi
 from optimization.robust_objective import RobustSampler
 from smt.sampling_methods import LHS
 import copy
 """
 Compute some statistical measure of a model at a given design
 """
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
 class StatCompComponent(om.ExplicitComponent):
 
     def initialize(self):
@@ -69,8 +75,12 @@ class StatCompComponent(om.ExplicitComponent):
             u_xlimits = self.sampler.options["xlimits"][self.sampler.x_u_ind]
             gsm = LHS(xlimits=u_xlimits, criterion='maximin') # different sampling techniques?
             eval_N = 5000*self.sampler.x_u_dim
+            seval = None
+            if rank == 0:
+                seval = gsm(eval_N)
+            seval = comm.bcast(seval)
             self.surr_eval = np.zeros([eval_N, self.sampler.dim])
-            self.surr_eval[:,self.sampler.x_u_ind] = gsm(eval_N)
+            self.surr_eval[:,self.sampler.x_u_ind] = seval
 
 
         # inputs
@@ -183,9 +193,11 @@ class StatCompComponent(om.ExplicitComponent):
                     plt.plot(trxs[0:-self.jump,1], trxs[0:-self.jump,0], 'bo')
                     plt.plot(trxs[-self.jump:,1], trxs[-self.jump:,0], 'ro')
                     path = self.options["name"]
-                    if not os.path.isdir(f"./{path}"):
-                        os.mkdir(f"{path}")
-                    plt.savefig(f"./{path}/subprob_surr_2d_iter_{self.sampler.iter_max}.pdf")    
+
+                    if rank == 0:
+                        if not os.path.isdir(f"./{path}"):
+                            os.mkdir(f"{path}")
+                        plt.savefig(f"./{path}/subprob_surr_2d_iter_{self.sampler.iter_max}.pdf")    
                     plt.clf()
                     # import pdb; pdb.set_trace()
 
@@ -224,7 +236,7 @@ class StatCompComponent(om.ExplicitComponent):
         fm = res[0]
         fs = res[1]
         obj = eta*fm + (1-eta)*fs
-        print(f"o       {self.sampler.options['name']} Iteration {self.sampler.iter_max}: Objective = {obj} ")
+        print_mpi(f"o       {self.sampler.options['name']} Iteration {self.sampler.iter_max}: RQuant = {obj} ")
         ### FD CHECK
         # h = 1e-6
         # gres = stat_comp(self.surrogate, self.func, 
@@ -334,8 +346,10 @@ class StatCompComponent(om.ExplicitComponent):
         gm = gres[0]
         gs = gres[1]
 
-        self.grads.append(eta*gm + (1-eta)*gs)
-        partials['musigma','x_d'] = eta*gm + (1-eta)*gs
+        grad_ = eta*gm + (1-eta)*gs
+        print_mpi(f"o       {self.sampler.options['name']} Iteration {self.sampler.iter_max}: RGrad = {grad_} ")
+        self.grads.append(grad_)
+        partials['musigma','x_d'] = grad_
 
     def get_fidelity(self):
         # return current number of samples
