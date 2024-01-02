@@ -409,6 +409,7 @@ class UncertainTrust(OptSubproblem):
             
             if con_test:
                 gmod, gerrm, gfeam, duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol)
+                gfeam = abs(gfeam)
             else:
                 gmod = self.prob_model.compute_totals(return_format='array')
                 gerrm = np.linalg.norm(gmod)
@@ -761,7 +762,7 @@ class UncertainTrust(OptSubproblem):
                             if con_test:
                                 #NOTE: need to recompute totals? TODO only do this for the robust surrogate part
                                 dummy = self.prob_model.compute_totals(of="stat.musigma", wrt="x_d", return_format='array')
-                                gmod, gerrm, gfeam, self.duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol, duals_given=self.duals)
+                                gmod, gerrm, gfeam, self.duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol, duals_given=self.duals, no_trust=True)
                             else:
                                 gmod = self.prob_model.compute_totals(return_format='array')
                                 gerrm = np.linalg.norm(gmod)

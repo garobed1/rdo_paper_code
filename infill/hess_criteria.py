@@ -177,7 +177,7 @@ class HessianRefine(ASCriteria):
 
             # self.h = hess
             # self.Mc = mcs
-            self.h = comm.allreduce(hess)
+            self.H = comm.allreduce(hess)
             self.Mc = comm.allreduce(mcs)
 
     # Assumption is that the quadratic terms are the error

@@ -57,7 +57,6 @@ def _mu_sigma_comp(func_handle, N, tx, xlimits, scales, pdf_list, tf = None, wei
     #stdev = np.sqrt(((area*sum(summand*vals))/N_act - (mean)**2))#/N
     A = (sum(dens)/N_act)*(area)
     stdev = np.sqrt(((area*sum(summand*vals))/N_act - (2-A)*(mean)**2 ))#/N
-    # import pdb; pdb.set_trace()
     return (mean, stdev), vals
 
 

@@ -7,7 +7,7 @@ from mpi4py import MPI
 import mphys_comp.impinge_setup as default_impinge_setup
 
 
-def GetProblem(prob, dim, alpha = 8., use_design=False):
+def GetProblem(prob, dim, alpha = 8., use_design=False, fix_radius=None, fix_foci=None, fix_loc=None):
     # Problem Settings
     #alpha = 8.       #arctangent jump strength
     if(prob == "arctan"):
@@ -80,7 +80,9 @@ def GetProblem(prob, dim, alpha = 8., use_design=False):
     elif(prob == "betatestex"):
         trueFunc = BetaRobustEx1D(ndim=dim)
     elif(prob == "uellipse"):
-        trueFunc = UncertainEllipse(fix_radius=None, fix_foci=None, fix_loc=None)
+        trueFunc = UncertainEllipse(fix_radius=fix_radius, fix_foci=fix_foci, fix_loc=fix_loc)
+    elif(prob == "uellipse_rad"):
+        trueFunc = UncertainEllipse(fix_radius=None, fix_foci=fix_foci, fix_loc=fix_loc)
     else:
         raise ValueError("Given problem not valid.")
 

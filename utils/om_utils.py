@@ -142,7 +142,7 @@ def l1_merit_function2(driver, penalty, feas_tol):
     return phi
 
 
-def get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol):
+def get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol, no_trust=False):
     active_cons = {}
     for con in cons.keys():
         con_name = cons[con]['name']
@@ -183,33 +183,34 @@ def get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol):
             # elif con_val < con_lb or np.isclose(con_val, con_lb, atol=feas_tol, rtol=feas_tol):
             #     active_cons[con_name] = True
 
-    for dv in dvs.keys():
-        dv_val = dv_vals[dv]
-        dv_ub = dvs[dv].get("upper", np.inf)
-        dv_lb = dvs[dv].get("lower", -np.inf)
+    if not no_trust:
+        for dv in dvs.keys():
+            dv_val = dv_vals[dv]
+            dv_ub = dvs[dv].get("upper", np.inf)
+            dv_lb = dvs[dv].get("lower", -np.inf)
 
-        # Initially assume all dv bounds are inactive
-        active_dv = np.zeros_like(dv_val, dtype=bool)
+            # Initially assume all dv bounds are inactive
+            active_dv = np.zeros_like(dv_val, dtype=bool)
 
-        # find indices of dv that violate the upper bound
-        active_dv_ind = np.asarray(dv_val > dv_ub).nonzero()
-        active_dv[active_dv_ind] = True
+            # find indices of dv that violate the upper bound
+            active_dv_ind = np.asarray(dv_val > dv_ub).nonzero()
+            active_dv[active_dv_ind] = True
 
-        # find indices of dv that are on the upper bound
-        active_dv_ind = np.asarray(np.isclose(
-            dv_val, dv_ub, atol=feas_tol, rtol=feas_tol)).nonzero()
-        active_dv[active_dv_ind] = True
+            # find indices of dv that are on the upper bound
+            active_dv_ind = np.asarray(np.isclose(
+                dv_val, dv_ub, atol=feas_tol, rtol=feas_tol)).nonzero()
+            active_dv[active_dv_ind] = True
 
-        # find indices of dv that violate the lower bound
-        active_dv_ind = np.asarray(dv_val < dv_lb).nonzero()
-        active_dv[active_dv_ind] = True
+            # find indices of dv that violate the lower bound
+            active_dv_ind = np.asarray(dv_val < dv_lb).nonzero()
+            active_dv[active_dv_ind] = True
 
-        # find indices of dv that are on the lower bound
-        active_dv_ind = np.asarray(np.isclose(
-            dv_val, dv_lb, atol=feas_tol, rtol=feas_tol)).nonzero()
-        active_dv[active_dv_ind] = True
+            # find indices of dv that are on the lower bound
+            active_dv_ind = np.asarray(np.isclose(
+                dv_val, dv_lb, atol=feas_tol, rtol=feas_tol)).nonzero()
+            active_dv[active_dv_ind] = True
 
-        active_cons[dv] = active_dv
+            active_cons[dv] = active_dv
 
         # if dv_val > dv_ub or np.isclose(dv_val, dv_ub, atol=feas_tol, rtol=feas_tol):
         #     active_cons[dv] = True
@@ -406,6 +407,9 @@ def optimality2(responses, obj, active_cons, dvs, duals, totals):
 
     full_vec = obj_grad - dual_vec @ active_cons_jac
     optimality = np.linalg.norm(full_vec, np.inf)
+
+    # if optimality > 1e-7:
+    #     import pdb; pdb.set_trace()
     return optimality, full_vec
 
 
@@ -661,7 +665,7 @@ def estimate_lagrange_multipliers(prob, objective, active_constraints, totals, d
 #     opt : float Optimality
 #     feas : float Feasability
 # """
-def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = None):
+def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = None, no_trust=False):
 
     # check if there are constraints first
     if not have_cons:
@@ -686,7 +690,7 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         # if meta['type'] == 'con':
 
     # active constraints
-    active_cons = get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol)
+    active_cons = get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol, no_trust=no_trust)
     
     # total derivatives
     totals = problem.compute_totals([*responses.keys()],
@@ -708,6 +712,6 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         d_list = [value for values in duals.values() for value in values]
         penalty = 2.*abs(max(d_list, key=abs))
         feas = l1_merit_function2(driver, penalty, feas_tol)
-    # import pdb; pdb.set_trace()
+
     #NOTE: replace totals with lagrangian grad?
     return grad, opt, feas, duals

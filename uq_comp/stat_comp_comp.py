@@ -165,7 +165,7 @@ class StatCompComponent(om.ExplicitComponent):
             self.surrogate.train()
             
             self.first_train = True
-
+            # import pdb; pdb.set_trace()
 
             if(self.options["print_surr_plots"]):
                 import matplotlib.pyplot as plt

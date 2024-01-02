@@ -897,8 +897,8 @@ class ToyLinearScale(Problem):
         
         for i in range(self.dim_u):
             sigs = np.sqrt(A/(i+1.))
-            self.xlimits[i, 0] = -6.*sigs
-            self.xlimits[i, 1] = 6.*sigs
+            self.xlimits[i, 0] = -3.*sigs
+            self.xlimits[i, 1] = 3.*sigs
 
 
     def _evaluate(self, x, kx):

@@ -11,6 +11,7 @@ from surrogate.pougrad import POUHessian
 from collections import OrderedDict
 import os, copy
 from functions.problem_picker import GetProblem
+from functions.smt_wrapper import SMTComponent
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from optimization.defaults import DefaultOptOptions
 import argparse
@@ -91,7 +92,9 @@ d_dim = oset.d_dim
 external_only = (oset.use_truth_to_train and oset.use_surrogate) #NEW
 pdfs = oset.pdfs
 t_dim = u_dim + d_dim
-func = GetProblem(oset.prob, t_dim)
+
+# get robust function
+func = GetProblem(oset.prob, t_dim, use_design=True)
 xlimits = func.xlimits
 try:
     p_con = oset.p_con
@@ -254,9 +257,20 @@ probt.driver.opt_settings = opt_settings
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
+
+
 ### NOTE NOTE NOTE ###
 ### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
-excomp = om.ExecComp('y = x*0.2')
+if oset.prob == "toylinear":
+    excomp = om.ExecComp('y = 10-x')
+elif oset.prob == "uellipse": #assume rosenbrock
+    excomp = SMTComponent("rosenbrock", dim_base=2)
+elif oset.prob == "uellipse_rad": #assume rosenbrock
+    excomp = SMTComponent("rosenbrock", dim_base=2)
+elif oset.prob == "betatestex":
+    excomp = om.ExecComp('y = x*0.2')
+else:
+    excomp = om.ExecComp('y = x*0.2')
 
 if p_con:
     probt.model.add_constraint("stat.musigma", lower=p_lb, upper=p_ub, equals=p_eq)
@@ -267,6 +281,9 @@ else:
     probt.model.add_objective("stat.musigma")
 probt.setup()
 probt.run_model()
+
+
+
 
 ### ORIGINAL FUNCTION PLOT ###
 # ndir = 200

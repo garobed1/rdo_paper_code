@@ -380,7 +380,14 @@ class ASCriteria():
         else:
             energy = term
 
+        # multiply by volume ?
+        # vol = 1
+        # for i in sub_ind:
+        #     vol *= (xlimits[i,1] - xlimits[i,0])
+        # energy *= vol
+
         self.energy_mode = False
+        # import pdb; pdb.set_trace()
         return -energy
 
     
