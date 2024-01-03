@@ -60,7 +60,11 @@ optuse = '.'.join(optsplit)
 if optuse.endswith('.py'):
     optuse = optuse.split('.')[:-1]
     optuse = '.'.join(optuse)
-oset = importlib.import_module(optuse)
+try:
+    oset = importlib.import_module(optuse)
+except:
+    oset = importlib.import_module('.'+optuse)
+
 title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
 if(oset.path == None):
     path = "."
@@ -73,7 +77,10 @@ suse = '.'.join(samsplit)
 if suse.endswith('.py'):
     suse = suse.split('.')[:-1]
     suse = '.'.join(suse)
-sset = importlib.import_module(suse)
+try:
+    sset = importlib.import_module(suse)
+except:
+    sset = importlib.import_module('.'+suse)
 
 if rank == 0:
     if not os.path.isdir(f"/{root}/{path}/{title}"):
@@ -364,6 +371,8 @@ else:
 
 if trust_region_bound: #anything but 0
     sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
+                                    title=title,
+                                    path='/' + root + '/' + path,
                                     xi=xi,
                                     initial_trust_radius=initial_trust_radius,
                                     trust_option=trust_region_bound,
@@ -378,6 +387,8 @@ if trust_region_bound: #anything but 0
                                     trust_increase_terminate=trust_increase_terminate)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
+                                    title=title,
+                                    path='/' + root + '/' + path,
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,

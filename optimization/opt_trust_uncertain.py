@@ -9,11 +9,16 @@ from utils.om_utils import get_om_design_size, om_dict_to_flat_array, grad_opt_f
 from utils.sutils import print_mpi
 from optimization.trust_bound_comp import TrustBound
 from collections import OrderedDict
-
+import pickle
 from smt.utils.options_dictionary import OptionsDictionary
 
 import openmdao.api as om
 from openmdao.utils.mpi import MPI
+
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 con_test = 1
 
@@ -186,6 +191,35 @@ class UncertainTrust(OptSubproblem):
         else:
             Exception("No trust region type specified!")
 
+    def _save_iteration(self, iter):
+
+        title = self.title
+        path = self.path
+
+
+        if rank == 0:
+            with open(f'{path}/{title}/grad_lhs_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.grad_lhs[-1], f)
+            with open(f'{path}/{title}/grad_rhs_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.grad_rhs[-1], f)
+            with open(f'{path}/{title}/radii_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.radii[-1], f)
+            with open(f'{path}/{title}/realizations_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.realizations[-1], f)
+            with open(f'{path}/{title}/areds_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.areds[-1], f)
+            with open(f'{path}/{title}/preds_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.preds[-1], f)
+            with open(f'{path}/{title}/loc_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.loc[-1], f)
+            with open(f'{path}/{title}/models_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.models[-1], f)
+            with open(f'{path}/{title}/reflog_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.reflog[-1], f)
+            with open(f'{path}/{title}/prob_truth_points_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.prob_truth.model.stat.sampler.current_samples, f)
+            with open(f'{path}/{title}/prob_model_points_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
 
         
 
@@ -429,11 +463,7 @@ class UncertainTrust(OptSubproblem):
             if self.options["print"]:
                 print_mpi(f"o       Step Size = {self.sdist}, Relative = {self.sdist_sc}, Step Tol = {stol}")
             
-            # If the predicted step size is small enough
-            if self.sdist_sc < stol and gfeam < self.ctol:
-                fail = 0
-                succ = 3
-                break
+            
 
             if self.options["model_grad_err_est"]:
                 # Compare to refined model
@@ -450,12 +480,7 @@ class UncertainTrust(OptSubproblem):
 
                 lhs, rhs = self.model_refiner(lhs0, rhs0)
 
-                # if we reach the reflevel limit, exit the optimization here and continue with full accuracy
-                #NOTE: MAY NEED TO BE CAREFUL WITH RESPECT TO FEASABILITY
-                if self.reflevel[-1] > self.options["truth_func_err_est_max"]:
-                    fail = 3
-                    succ = 0
-                    break
+                
 
 
                 # recompute model
@@ -601,17 +626,9 @@ class UncertainTrust(OptSubproblem):
             getext = str(self.gerr)
 
 
-            #If g truth metrics are not met, 
-            if self.gerr < self.gtol and gfeam < self.ctol and not self.options["inexact_gradient_only"]:
-                fail = 0
-                succ = 1
-                break
+            
 
-            # Alternatively, use the inexact gradient condition
-            if lhs0 < self.xi*rhs0 and gerrm < self.gtol and gfeam < self.ctol:
-                fail = 0
-                succ = 2
-                break
+            
 
             # if we used the "truth" function to check refinement, we need to do this step now
             if not self.options["model_grad_err_est"]:
@@ -639,6 +656,34 @@ class UncertainTrust(OptSubproblem):
             print_mpi(f"O       RHS: {rhs}")
             print_mpi(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
             # 
+
+            self._save_iteration(k)
+
+            #If g truth metrics are not met, 
+            if self.gerr < self.gtol and gfeam < self.ctol and not self.options["inexact_gradient_only"]:
+                fail = 0
+                succ = 1
+                break
+
+            # Alternatively, use the inexact gradient condition
+            if lhs0 < self.xi*rhs0 and gerrm < self.gtol and gfeam < self.ctol:
+                fail = 0
+                succ = 2
+                break
+
+            # If the predicted step size is small enough
+            if self.sdist_sc < stol and gfeam < self.ctol:
+                fail = 0
+                succ = 3
+                break
+
+            # if we reach the reflevel limit, exit the optimization here and continue with full accuracy
+            #NOTE: MAY NEED TO BE CAREFUL WITH RESPECT TO FEASABILITY
+            if self.options["model_grad_err_est"] and self.reflevel[-1] > self.options["truth_func_err_est_max"]:
+                fail = 3
+                succ = 0
+                break
+
 
         if k >= miter:
             succ = 0

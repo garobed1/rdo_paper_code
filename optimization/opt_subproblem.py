@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 import collections
-
+import os
 from optimization.optimizers import optimize
 from optimization.robust_objective import RobustSampler
 
@@ -71,9 +71,29 @@ class OptSubproblem():
         self._declare_options()
         self.options.update(kwargs)
 
+        self.title = self.options["title"]
+        self.path = self.options["path"]
+
+        if not os.path.exists(f'{self.path}/{self.title}'):
+            raise FileNotFoundError(f'{self.path}/{self.title} does not exist!')
+
     def _declare_options(self):
         declare = self.options.declare
         
+        declare(
+            "title", 
+            default='opt_subprob', 
+            types=str,
+            desc="name"
+        )
+
+        declare(
+            "path", 
+            default='.', 
+            types=str,
+            desc="path to save data"
+        )
+
         declare(
             "gtol", 
             default=1e-6, 
