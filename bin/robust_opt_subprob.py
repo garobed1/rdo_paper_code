@@ -60,11 +60,7 @@ optuse = '.'.join(optsplit)
 if optuse.endswith('.py'):
     optuse = optuse.split('.')[:-1]
     optuse = '.'.join(optuse)
-try:
-    oset = importlib.import_module(optuse)
-except:
-    oset = importlib.import_module('.'+optuse)
-
+oset = importlib.import_module(optuse)
 title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
 if(oset.path == None):
     path = "."
@@ -77,10 +73,7 @@ suse = '.'.join(samsplit)
 if suse.endswith('.py'):
     suse = suse.split('.')[:-1]
     suse = '.'.join(suse)
-try:
-    sset = importlib.import_module(suse)
-except:
-    sset = importlib.import_module('.'+suse)
+sset = importlib.import_module(suse)
 
 if rank == 0:
     if not os.path.isdir(f"/{root}/{path}/{title}"):
@@ -260,7 +253,7 @@ try:
     probt.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
 except:
     probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
-probt.driver.opt_settings = opt_settings
+    probt.driver.opt_settings = opt_settings
 probt.model.connect("x_d", "stat.x_d")
 probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 # probt.driver = om.ScipyOptimizeDriver(optimizer='CG') 
@@ -356,7 +349,7 @@ try:
     probm.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
 except:
     probm.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
-probm.driver.opt_settings = opt_settings
+    probm.driver.opt_settings = opt_settings
 probm.model.connect("x_d", "stat.x_d")
 probm.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 if p_con:
