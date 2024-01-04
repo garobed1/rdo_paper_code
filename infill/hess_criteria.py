@@ -184,6 +184,7 @@ class HessianRefine(ASCriteria):
     def _evaluate(self, x, bounds, dir=0):
         X_cont = np.atleast_2d(x)
         numeval = X_cont.shape[0]
+        cases = divide_cases(numeval, size)
         try:
             delta = self.model.options["delta"]
         except:
@@ -200,28 +201,38 @@ class HessianRefine(ASCriteria):
         # D = cdist(np.array([x]), trx)
         # distf = gen_dist_func_nb(parallel=True)
         distf = cdist
-        if self.energy_mode and  self.D_cache is None:
-            diff = trx.shape[0] - self.D_cache.shape[1]
+        # if self.energy_mode and  self.D_cache is None:
+        #     diff = trx.shape[0] - self.D_cache.shape[1]
 
-            if diff > 0:
-                self.D_cache = np.hstack([self.D_cache, distf(X_cont, trx[-diff:,:])])
+        #     if diff > 0:
+        #         self.D_cache = np.hstack([self.D_cache, distf(X_cont[cases[rank],:], trx[-diff:,:])])
+        #     # import pdb; pdb.set_trace()
 
-            D = self.D_cache
+        #     D = self.D_cache
 
-        else:
-            D = distf(X_cont, trx)
-        mindist = np.min(D, axis=1)
+        # else:
+        D = distf(X_cont[cases[rank],:], trx)
+        mindist_p = np.min(D, axis=1)
+        mindist = np.zeros(numeval)
+        c = 0
+        for k in cases[rank]:
+            mindist[k] = mindist_p[c]
+            c += 1
+
+        mindist = comm.allreduce(mindist)
+
+        D = None
 
         fac = self.dV*Mc
         y_ = np.zeros(numeval)
-        cases = divide_cases(numeval, size)
         if self.energy_mode:
-            y_ = np.zeros([numeval, self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
             for k in cases[rank]:
             # for k in range(numeval):
             
                 work = X_cont[k,:] - trx
-                dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)#np.sqrt(D[0][i] + delta)
                 local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
                 expfac = np.exp(-self.rho*(dist-mindist[k]))
                 numer = np.einsum('ij,i->j', local, expfac)
@@ -235,7 +246,8 @@ class HessianRefine(ASCriteria):
             # for k in prange(numeval):
 
                 work = X_cont[k,:] - trx
-                dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
                 local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
                 expfac = np.exp(-self.rho*(dist-mindist[k]))
                 numer = np.dot(local, expfac)
@@ -288,6 +300,7 @@ class HessianRefine(ASCriteria):
     def _eval_grad(self, x, bounds, dir=0):
         X_cont = np.atleast_2d(x)
         numeval = X_cont.shape[0]
+        cases = divide_cases(numeval, size)
         dim = X_cont.shape[1]
         try:
             delta = self.model.options["delta"]
@@ -300,21 +313,30 @@ class HessianRefine(ASCriteria):
 
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
         # exhaustive search for closest sample point, for regularization
-        D = cdist(X_cont, trx)
-        mindist = np.min(D, axis=1)
+        # D = cdist(X_cont, trx)
+        # mindist = np.min(D, axis=1)
+
+        D = cdist(X_cont[cases[rank],:], trx)
+        mindist_p = np.min(D, axis=1)
+        mindist = np.zeros(numeval)
+        c = 0
+        for k in cases[rank]:
+            mindist[k] = mindist_p[c]
+            c += 1
+
+        mindist = comm.allreduce(mindist)
 
         
         y_ = np.zeros(numeval)
         dy_ = np.zeros([numeval, dim])
-        cases = divide_cases(numeval, size)
         for k in cases[rank]:
         # for k in range(numeval):
         # for k in prange(numeval):
 
             # for i in range(self.ntr):
             work = X_cont[k,:] - trx 
-            dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
-            
+            # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+            dist = np.sqrt(np.einsum('ij,ij->i',work,work)  + delta)
             local = self.higher_terms(work, None, self.H)*self.dV*Mc
             dlocal = self.higher_terms_deriv(work, None, self.H)
             

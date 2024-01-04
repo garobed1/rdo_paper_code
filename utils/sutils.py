@@ -383,12 +383,33 @@ def symMatfromVec(i, j, N):
                 7 8
                   9
 
-    vector: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+    compressed form: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
     """
     if(i <= j):
         return int(i*N - (i - 1) * i/2 + j - i)
     else:
         return int(j*N - (j - 1) * j/2 + i - j)
+    
+# def symMatVecProd(S, x, N):
+#     """
+#     Compute matrix-vector product from a compressed symmetric matrix
+
+#     Inputs:
+#         S - compressed symmetric matrix
+#         x - vector
+#         N - matrix size
+#     Outputs:
+#         y - mat-vec product
+
+#     matrix: 0 1 2 3
+#               4 5 6
+#                 7 8
+#                   9
+
+#     compressed form: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+#     """
+    
+    
 
 
 def maxEigenEstimate(x, xn, g, gn):
