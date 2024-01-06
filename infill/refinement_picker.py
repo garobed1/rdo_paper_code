@@ -21,9 +21,9 @@ def GetCriteria(set, model0, gtrain0, xlimits, pdf_weight=None, sub_index=None):
     elif(set.rtype == "taylorexp"):
         RC0 = TaylorExploreRefine(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, rscale=set.rscale, objective=set.obj, multistart=set.multistart)
     elif(set.rtype == "hess"):
-        RC0 = HessianRefine(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, neval=set.neval_fac*dim+set.neval_add, rho=set.rho, rscale=set.rscale, multistart=set.multistart, scale_by_volume=set.vsca, return_rescaled=set.rsca, print_rc_plots=set.rc_print)
+        RC0 = HessianRefine(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, neval=set.neval_fac*dim+set.neval_add, rho=set.rho, rscale=set.rscale, multistart=set.multistart, scale_by_volume=set.vsca, return_rescaled=set.rsca, min_contribution=set.min_contribution, print_rc_plots=set.rc_print)
     elif(set.rtype == "hessgrad"):
-        RC0 = HessianGradientRefine(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, neval=set.neval_fac*dim+set.neval_add, rho=set.rho, rscale=set.rscale, multistart=set.multistart, scale_by_volume=set.vsca, return_rescaled=set.rsca, grad_select=fix_index, print_rc_plots=set.rc_print)
+        RC0 = HessianGradientRefine(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, neval=set.neval_fac*dim+set.neval_add, rho=set.rho, rscale=set.rscale, multistart=set.multistart, scale_by_volume=set.vsca, return_rescaled=set.rsca, min_contribution=set.min_contribution, grad_select=fix_index, print_rc_plots=set.rc_print)
     elif(set.rtype == "poussa"):
         RC0 = POUSSA(model0, gtrain0, xlimits, sub_index=sub_index, pdf_weight=pdf_weight, improve=set.pperb, multistart=set.multistart, print_rc_plots=set.rc_print)
     elif(set.rtype == "pousfcvt"):

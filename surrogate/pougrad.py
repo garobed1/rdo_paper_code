@@ -85,6 +85,13 @@ class POUSurrogate(SurrogateModel):
             desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
         )
 
+        declare(
+            "min_points",
+            10,
+            types=int,
+            desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+        )
+
         self.supports["training_derivatives"] = True
 
         self._return_terms = False # return gradient terms, only on when calling new method
@@ -118,8 +125,10 @@ class POUSurrogate(SurrogateModel):
         delta = self.options["delta"]
         rho = self.options["rho"]
         cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
         ball_rad = None
         neighbors = None
+        cases = divide_cases(numeval, size)
 
         if(self.options["rscale"]):
             rho = self.options["rscale"]*pow(numsample, 1./xc.shape[1])
@@ -128,17 +137,14 @@ class POUSurrogate(SurrogateModel):
 
         D = cdist(X_cont , xc) #numeval x numsample
         
-        neighbors_all = list(range(numsample))
-        if(cap):
-            ball_rad = -np.log(cap)/rho
-            neighbors_all = self.tree.query_ball_point(X_cont, ball_rad)
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, rho, cap, cmin, numsample, cases)
 
         # exhaustive search for closest sample point, for regularization
         mindist = np.min(D, axis=1)
 
         # loop over rows in xt
         y_ = np.zeros(numeval)
-        cases = divide_cases(numeval, size)
+        c = 0
         for k in cases[rank]:
         # for k in range(numeval): ###NOTE: TURN INTO PRANGE?
         # for k in prange(numeval): ###NOTE: TURN INTO PRANGE?
@@ -149,7 +155,8 @@ class POUSurrogate(SurrogateModel):
 
             neighbors = neighbors_all
             if ball_rad:
-                neighbors = neighbors_all[k]
+                # neighbors = neighbors_all[k]
+                neighbors = neighbors_all[c]
                 xc = self.X_norma[neighbors]
 
             # evaluate the surrogate, requiring the distance from every point
@@ -172,6 +179,8 @@ class POUSurrogate(SurrogateModel):
             # exec2 += t2-t1
 
             y_[k] = numer/denom
+            c += 1
+
         y_ = comm.allreduce(y_)
         y = (self.y_mean + self.y_std * y_).ravel()
 
@@ -216,18 +225,22 @@ class POUSurrogate(SurrogateModel):
         rho = self.options["rho"]
 
         cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
         ball_rad = None
         neighbors = None
+        cases = divide_cases(numeval, size)
 
         if(self.options["rscale"]):
             rho = self.options["rscale"]*pow(numsample, 1./xc.shape[1])
 
         D = cdist(X_cont ,xc) #numeval x numsample
 
-        neighbors_all = list(range(numsample))
-        if(cap):
-            ball_rad = -np.log(cap)/rho
-            neighbors_all = self.tree.query_ball_point(X_cont, ball_rad)
+        # neighbors_all = list(range(numsample))
+        # if(cap):
+        #     ball_rad = -np.log(cap)/rho
+        #     neighbors_all = self.tree.query_ball_point(X_cont, ball_rad)
+
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, rho, cap, cmin, numsample, cases)
 
         mindist = np.min(D, axis=1)
 
@@ -237,7 +250,7 @@ class POUSurrogate(SurrogateModel):
         d1_ = np.zeros(numeval)
         d2_ = np.zeros(numeval)
         d3_ = np.zeros(numeval)
-        cases = divide_cases(numeval, size)
+        c = 0
         for k in cases[rank]:
         # for k in range(numeval):
         # for k in prange(numeval):
@@ -248,10 +261,16 @@ class POUSurrogate(SurrogateModel):
             dnumer = 0#np.zeros(self.dim)
             ddenom = 0#np.zeros(self.dim)
 
+            neighbors = neighbors_all
+            if ball_rad:
+                # neighbors = neighbors_all[k]
+                neighbors = neighbors_all[c]
+                xc = self.X_norma[neighbors]
+
             # evaluate the surrogate, requiring the distance from every point
             # for i in range(numsample):
             work = x - xc
-            dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+            dist = np.sqrt(D[k,neighbors]**2 + delta)#np.sqrt(D[0][i] + delta)
             ddist = work[:,kx]/dist
 
             expfac = np.exp(-rho*(dist-mindist[k]))
@@ -260,8 +279,8 @@ class POUSurrogate(SurrogateModel):
             # local = np.zeros(numsample)
             dlocal = np.zeros(numsample)
             # for i in range(numsample):
-            local = f[:,0] + self.higher_terms(work, g, h)
-            dlocal = self.higher_terms_deriv(work, g, h, kx)
+            local = f[neighbors,0] + self.higher_terms(work, g[neighbors], h[neighbors])
+            dlocal = self.higher_terms_deriv(work, g[neighbors], h[neighbors], kx)
 
             numer = np.dot(local, expfac)
             dnumer = np.dot(local, dexpfac) + np.dot(dlocal, expfac)
@@ -279,7 +298,7 @@ class POUSurrogate(SurrogateModel):
             d2_[k] = np.dot(dlocal, expfac)/denom
             # import pdb; pdb.set_trace()
             d3_[k] = -(numer*ddenom)/(denom**2)
-
+            c += 1
             # dy_dx_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
         y_ = comm.allreduce(y_)
         d1_ = comm.allreduce(d1_)
@@ -346,6 +365,28 @@ class POUSurrogate(SurrogateModel):
         d1, d2, d3 = self._predict_derivatives(xt, kx)
         self._return_terms = False
         return d1, d2, d3
+
+
+    def neighbors_func(self, X_cont, rho, cap, cmin, numsample, cases):
+
+        neighbors_all = list(range(numsample))
+        ball_rad = None
+        if(cap):
+            ball_rad = -np.log(cap)/rho
+            neighbors_all = self.tree.query_ball_point(X_cont[cases[rank],:], ball_rad)
+            redo = []
+            for i in range(len(neighbors_all)):
+                over = len(neighbors_all[i]) - cmin
+                if over < 0:
+                    redo.append(i)
+
+            if len(redo) > 0:
+                dum, neighbors_redo = self.tree.query(X_cont[cases[rank],:][redo,:], cmin)
+
+                for j in range(len(neighbors_redo)):
+                    neighbors_all[redo[j]] = neighbors_redo[j]
+        
+        return neighbors_all, ball_rad
 
 '''
 First-order POU surrogate with Hessian estimation

@@ -139,7 +139,11 @@ def getxnew(rcrit, bounds, batch, x_init=None, options=None):
         # fixed variables are added back in post_asopt
         rx = np.atleast_2d(rx)
         xnew.append(rcrit.post_asopt(rx, bounds, dir=i))
-        xnew = np.concatenate(xnew, axis=0)
+    
+    xnew = np.concatenate(xnew, axis=0)
+    print_mpi(xnew)
+
+        
     return xnew
 
 
@@ -268,6 +272,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                     print_mpi('')
             # replace criteria
 
+            # import pdb; pdb.set_trace()
             # convergence check
             if tol_condition and en < e_tol_p:
                 tol_met = True

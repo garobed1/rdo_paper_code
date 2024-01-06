@@ -179,18 +179,25 @@ class ASCriteria():
         xc, bounds_m = self._pre_asopt(bounds, dir)
         # NOTE: xc not doing anything here
 
-        # ### FD CHECK
-        # h = 1e-6
-        # zero = 0.5*np.ones([1,bounds.shape[0]])
-        # step = 0.5*np.ones([1,bounds.shape[0]])
-        # step[0,0] += h
-        # ad = self.eval_grad(zero, bounds, dir)
-        # fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        # step = 0.5*np.ones([1,bounds.shape[0]])
-        # step[0,1] += h
-        # fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
-        # fd = [fd1, fd2]
-        # import pdb; pdb.set_trace()
+        ### FD CHECK
+        # if dir == 1:
+        #     h = 1e-6
+        #     zero = 0.5*np.ones([1,bounds.shape[0]])
+        #     zero[0,0] = self.trx[-1,0]-0.01
+        #     zero[0,1] = 0.65
+        #     step = 0.5*np.ones([1,bounds.shape[0]])
+        #     step[0,0] = self.trx[-1,0]-0.01
+        #     step[0,1] = 0.65
+        #     step[0,0] += h
+        #     ad = self.eval_grad(zero, bounds, dir)
+        #     fd1 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        #     step = 0.5*np.ones([1,bounds.shape[0]])
+        #     step[0,0] = self.trx[-1,0]-0.01
+        #     step[0,1] = 0.65
+        #     step[0,1] += h
+        #     fd2 = (self.evaluate(step, bounds, dir) - self.evaluate(zero, bounds, dir))/h
+        #     fd = [fd1, fd2]
+        #     import pdb; pdb.set_trace()
 
         ### Get Reduced Space
         dim_r = len(self.sub_ind)
@@ -249,7 +256,10 @@ class ASCriteria():
             if isinstance(self.pdfs[j], float) or j not in self.sub_ind:
                 weight *= 1.0
             else:
-                weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                try:
+                    weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                except:
+                    import pdb; pdb.set_trace()
                 area *= bounds[j,1] - bounds[j,0]
         ans_w = ans*weight*area
         return ans_w
@@ -370,7 +380,7 @@ class ASCriteria():
             y = self.evaluate(x_eff, bounds, direction)
             return y
 
-        # self.energy_mode = True
+        self.energy_mode = True
 
         # energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
         res = eval_eff(self.e_x, xlimits, dir)

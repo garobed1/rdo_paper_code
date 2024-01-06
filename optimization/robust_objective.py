@@ -772,6 +772,12 @@ class AdaptiveSampler(RobustSampler):
                 rF.initialize(mf, g0)
                 en = rF.get_energy(bounds)
 
+                if c % 5 == 0:
+                    e_tol_p = e_tol(mf)
+                    e_tol_h = copy.deepcopy(e_tol_p)
+                else:
+                    e_tol_p = copy.deepcopy(e_tol_h)
+
                 d3 = np.append(d3, np.array([[en, e_tol_p, N_added]]), axis=0)
                 converged = d3[-1,0] < d3[-1,1]
                 print_mpi(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")

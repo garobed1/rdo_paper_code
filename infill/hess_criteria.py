@@ -86,6 +86,19 @@ class HessianRefine(ASCriteria):
             types=(int, float),
             desc="allow optimizer to go out of bounds, then snap inside if it goes there"
         )
+        declare(
+            "min_contribution",
+            1e-13,
+            types=(float),
+            desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+        )
+
+        declare(
+            "min_points",
+            4,
+            types=int,
+            desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+        )
 
 
     def initialize(self, model=None, grad=None):
@@ -148,6 +161,7 @@ class HessianRefine(ASCriteria):
             self.rho = self.options["rho"]
         else:
             self.rho = self.options['rscale']*pow(self.ntr, 1./self.dim)
+        self.rho2 = 5000. # rho to use for energy calc
 
         # Generate kd tree for nearest neighbors lookup
         self.tree = KDTree(trx)
@@ -180,9 +194,22 @@ class HessianRefine(ASCriteria):
             self.H = comm.allreduce(hess)
             self.Mc = comm.allreduce(mcs)
 
+        m, n = trx.shape
+
+        # factor in cell volume
+        fakebounds = copy.deepcopy(self.bounds)
+        fakebounds[:,0] = 0.
+        fakebounds[:,1] = 1.
+        if self.options["scale_by_volume"]:
+            self.dV = estimate_pou_volume(trx, fakebounds)
+        else:
+            self.dV = np.ones(trx.shape[0])
+
     # Assumption is that the quadratic terms are the error
     def _evaluate(self, x, bounds, dir=0):
         X_cont = np.atleast_2d(x)
+        cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
         numeval = X_cont.shape[0]
         cases = divide_cases(numeval, size)
         try:
@@ -212,6 +239,10 @@ class HessianRefine(ASCriteria):
 
         # else:
         D = distf(X_cont[cases[rank],:], trx)
+
+        # neighbors
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, self.rho, cap, cmin, self.ntr, cases)
+
         mindist_p = np.min(D, axis=1)
         mindist = np.zeros(numeval)
         c = 0
@@ -222,39 +253,59 @@ class HessianRefine(ASCriteria):
         mindist = comm.allreduce(mindist)
 
         D = None
-
-        fac = self.dV*Mc
+        fac_all = self.dV*Mc
         y_ = np.zeros(numeval)
         if self.energy_mode:
-            y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            # y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            c = 0
             for k in cases[rank]:
             # for k in range(numeval):
-            
-                work = X_cont[k,:] - trx
+                
+                neighbors = neighbors_all
+                if ball_rad:
+                    # neighbors = neighbors_all[k]
+                    neighbors = neighbors_all[c]
+                    xc = trx[neighbors,:]
+                fac = fac_all[neighbors]
+
+                # work = X_cont[k,:] - trx[:self.ntr,:]
+                work = X_cont[k,:] - xc
                 # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
                 dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)#np.sqrt(D[0][i] + delta)
-                local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
-                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
+                local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H[neighbors]), fac) # NEWNEWNEW
+                expfac = np.exp(-self.rho2*(dist-mindist[k]))
                 numer = np.einsum('ij,i->j', local, expfac)
                 denom = np.sum(expfac)
         
                 y_[k] = numer/denom
+                c += 1
+            # import pdb; pdb.set_trace()
 
         else: 
+            c = 0
             for k in cases[rank]:
             # for k in range(numeval):
             # for k in prange(numeval):
+                neighbors = neighbors_all
+                if ball_rad:
+                    # neighbors = neighbors_all[k]
+                    neighbors = neighbors_all[c]
+                    xc = trx[neighbors,:]
+                fac = fac_all[neighbors]
 
-                work = X_cont[k,:] - trx
+                # work = X_cont[k,:] - trx[:self.ntr,:]
+                work = X_cont[k,:] - xc
                 # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
                 dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
-                local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
                 expfac = np.exp(-self.rho*(dist-mindist[k]))
                 numer = np.dot(local, expfac)
                 denom = np.sum(expfac)
         
                 y_[k] = numer/denom
-
+                c += 1
         # y_ = pou_crit_loop(X_cont, D, trx, fac, mindist, delta, self.energy_mode, self.higher_terms, self.H, self.rho)
         
         y_ = comm.allreduce(y_)
@@ -280,12 +331,14 @@ class HessianRefine(ASCriteria):
         """
         # import pdb; pdb.set_trace()
         # for batches, loop over already added points to prevent clustering
+        # this should only work for 
         for i in range(dir):
             ind = self.ntr + i
             work = x - trx[ind]
-            dirdist = np.sqrt(np.dot(work, work)) 
+            # dirdist = np.sqrt(np.dot(work, work)) 
+            dirdist = np.linalg.norm(work) 
             # ans += 1./(np.dot(work, work) + 1e-10)
-            ans += np.exp(-self.rho*(dirdist+ delta))
+            ans += np.exp(-self.rho*(dirdist + delta))
 
         return ans 
     
@@ -300,6 +353,8 @@ class HessianRefine(ASCriteria):
     def _eval_grad(self, x, bounds, dir=0):
         X_cont = np.atleast_2d(x)
         numeval = X_cont.shape[0]
+        cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
         cases = divide_cases(numeval, size)
         dim = X_cont.shape[1]
         try:
@@ -317,6 +372,8 @@ class HessianRefine(ASCriteria):
         # mindist = np.min(D, axis=1)
 
         D = cdist(X_cont[cases[rank],:], trx)
+
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, self.rho, cap, cmin, trx.shape[0], cases)
         mindist_p = np.min(D, axis=1)
         mindist = np.zeros(numeval)
         c = 0
@@ -326,22 +383,34 @@ class HessianRefine(ASCriteria):
 
         mindist = comm.allreduce(mindist)
 
-        
+        fac_all = self.dV*Mc
+
         y_ = np.zeros(numeval)
         dy_ = np.zeros([numeval, dim])
+        c = 0
         for k in cases[rank]:
         # for k in range(numeval):
         # for k in prange(numeval):
 
+            neighbors = neighbors_all
+            if ball_rad:
+                # neighbors = neighbors_all[k]
+                neighbors = neighbors_all[c]
+                xc = trx[neighbors,:]
+            fac = fac_all[neighbors]
+
             # for i in range(self.ntr):
-            work = X_cont[k,:] - trx 
+            # work = X_cont[k,:] - trx[:self.ntr,:] 
+            work = X_cont[k,:] - xc
             # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
             dist = np.sqrt(np.einsum('ij,ij->i',work,work)  + delta)
-            local = self.higher_terms(work, None, self.H)*self.dV*Mc
-            dlocal = self.higher_terms_deriv(work, None, self.H)
+            # local = self.higher_terms(work, None, self.H)*fac
+            local = self.higher_terms(work, None, self.H[neighbors])*fac
+            # dlocal = self.higher_terms_deriv(work, None, self.H)
+            dlocal = self.higher_terms_deriv(work, None, self.H[neighbors])
             
             ddist = np.einsum('i,ij->ij', 1./dist, work)
-            dlocal = np.einsum('i,ij->ij', self.dV*Mc, dlocal)
+            dlocal = np.einsum('i,ij->ij', fac, dlocal)
 
             expfac = np.exp(-self.rho*(dist-mindist[k]))
             dexpfac = np.einsum('i,ij->ij',-self.rho*expfac, ddist)
@@ -353,6 +422,7 @@ class HessianRefine(ASCriteria):
             y_[k] = numer/denom
             dy_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
 
+            c += 1
 
         y_ = comm.allreduce(y_)
         dy_ = comm.allreduce(dy_)
@@ -366,14 +436,14 @@ class HessianRefine(ASCriteria):
             #dwork = np.eye(n)
             # d2 = np.dot(work, work)
             # dd2 = 2*work
-            dirdist = np.sqrt(np.dot(work, work)) 
+            dirdist = np.linalg.norm(work) 
             # term = 1.0/(d2 + 1e-10)
             # ans += -1.0/((d2 + 1e-10)**2)*dd2
             ddirdist = work/dirdist
-            ans += -self.rho*ddirdist*np.exp(-self.rho*(dirdist+ delta))
-        
+            quant = -self.rho*ddirdist*np.exp(-self.rho*(dirdist+ delta))
+            ans += quant
 
-        
+            # import pdb; pdb.set_trace()
         return ans
 
     def higher_terms(self, dx, g, h):
@@ -405,16 +475,16 @@ class HessianRefine(ASCriteria):
         
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
 
-        m, n = trx.shape
+        # m, n = trx.shape
 
-        # factor in cell volume
-        fakebounds = copy.deepcopy(bounds)
-        fakebounds[:,0] = 0.
-        fakebounds[:,1] = 1.
-        if self.options["scale_by_volume"]:
-            self.dV = estimate_pou_volume(trx, fakebounds)
-        else:
-            self.dV = np.ones(trx.shape[0])
+        # # factor in cell volume
+        # fakebounds = copy.deepcopy(bounds)
+        # fakebounds[:,0] = 0.
+        # fakebounds[:,1] = 1.
+        # if self.options["scale_by_volume"]:
+        #     self.dV = estimate_pou_volume(trx, fakebounds)
+        # else:
+        #     self.dV = np.ones(trx.shape[0])
         # if(self.options["out_of_bounds"]):
         #     for i in range(self.dim):
         #         bounds[i][0] = -self.options["out_of_bounds"]
@@ -434,6 +504,28 @@ class HessianRefine(ASCriteria):
         #         x[i] = 0.0
 
         return x
+    
+
+    def neighbors_func(self, X_cont, rho, cap, cmin, numsample, cases):
+
+        neighbors_all = list(range(numsample))
+        ball_rad = None
+        if(cap):
+            ball_rad = -np.log(cap)/rho
+            neighbors_all = self.tree.query_ball_point(X_cont[cases[rank],:], ball_rad)
+            redo = []
+            for i in range(len(neighbors_all)):
+                over = len(neighbors_all[i]) - cmin
+                if over < 0:
+                    redo.append(i)
+
+            if len(redo) > 0:
+                dum, neighbors_redo = self.tree.query(X_cont[cases[rank],:][redo,:], cmin)
+
+                for j in range(len(neighbors_redo)):
+                    neighbors_all[redo[j]] = neighbors_redo[j]
+        
+        return neighbors_all, ball_rad
 
 
 
@@ -497,9 +589,12 @@ class HessianGradientRefine(HessianRefine):
         davg_terms = np.zeros_like(dx)
         terms = np.einsum('ijk, ik->ij', h, dx)
         terms = np.einsum('j,ij->ij',scaler, terms)
-        davg_terms[:,ind_use] = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use][:,ind_use,:], scaler[ind_use])
+        # davg_terms[:,ind_use] = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use][:,ind_use,:], scaler[ind_use])
+        xH = np.einsum('j,ijk->ijk',scaler, h)
+        davg_terms = np.einsum('ikj,ij->ij',xH[:,ind_use,:], terms[:,ind_use])
         avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         davg_terms = np.einsum('ij,i->ij', davg_terms, 1./avg_terms)
+        # import pdb; pdb.set_trace()
         return davg_terms
 
 

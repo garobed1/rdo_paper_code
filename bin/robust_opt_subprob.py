@@ -162,6 +162,7 @@ xlimits_u = xlimits[sampler_t.x_u_ind]
 ##### SURROGATE MODEL PARAMETERS #####
 #TODO: WRITE SURROGATE PICKER
 msur = None
+min_contribution = 1e-14
 if use_surrogate:
     rscale = 5.5
     if hasattr(sset, 'rscale'):
@@ -175,10 +176,10 @@ if use_surrogate:
 
     if(full_surrogate):
         sdim = t_dim
-        msur = POUHessian(bounds=xlimits)
+        msur = POUHessian(bounds=xlimits, rscale = 5.5, neval = t_dim+3, min_contribution = min_contribution)
     else:
         sdim = u_dim
-        msur = POUHessian(bounds=xlimits_u)
+        msur = POUHessian(bounds=xlimits_u, rscale = 5.5, neval = u_dim+3, min_contribution = min_contribution)
 
     neval = sset.neval_fac*t_dim+sset.neval_add
     msur.options.update({"rscale":rscale})

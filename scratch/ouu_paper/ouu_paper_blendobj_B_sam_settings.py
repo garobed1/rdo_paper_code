@@ -12,7 +12,7 @@ gopt = 'ga' #'brute'
 localswitch = True
 # POU Params
 rscale = 5.5
-rho = 5000. # NOTE: Only applies to criteria
+rho = 50. # NOTE: Only applies to criteria
 rsca = True  # hess function value scale
 vsca = False # hess cell volume scale
 
