@@ -75,13 +75,20 @@ if suse.endswith('.py'):
     suse = '.'.join(suse)
 sset = importlib.import_module(suse)
 
+
+# copy over settings, and grab previous iteration index if it exists
+k = 0
 if rank == 0:
     if not os.path.isdir(f"/{root}/{path}/{title}"):
         os.mkdir(f"/{root}/{path}/{title}")
     shutil.copy(f"{osetfile}", f"/{root}/{path}/{title}/opt_settings.py")
     shutil.copy(f"{ssetfile}", f"/{root}/{path}/{title}/sam_settings.py")
 
-
+    # also, grab the last iteration
+    if os.path.isfile(f'{path}/{title}/previous_iter.pickle'):
+        with open(f'{path}/{title}/previous_iter.pickle', 'rb') as f:
+            k = pickle.load(f)
+k = comm.bcast(k)
 
 name = oset.name
 print_plots = oset.print_plots
@@ -417,8 +424,8 @@ sub_optimizer.prob_model.run_model()
 
 ### INITIALIZE RECORDERS ###
 
-rec_t = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_truth.sql')
-rec_m = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_model.sql')
+rec_t = om.SqliteRecorder(f'/{root}/{path}/{title}_{k}' + '_truth.sql')
+rec_m = om.SqliteRecorder(f'/{root}/{path}/{title}_{k}' + '_model.sql')
 sub_optimizer.prob_truth.add_recorder(rec_t)
 sub_optimizer.prob_model.add_recorder(rec_m)
 sub_optimizer.prob_truth.driver.recording_options['record_inputs'] = True

@@ -9,6 +9,7 @@ from scipy.stats import qmc
 from surrogate.pougrad import POUSurrogate
 from utils.error import rmse, meane, full_error
 from utils.sutils import convert_to_smt_grads, print_mpi
+import pickle, os, sys
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -160,12 +161,18 @@ Inputs:
     batch: number of points to generate before computing function, only some rcrit support
     options: getxnew specific options
 """
-def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, options=None):
+def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, options=None, savefile=None):
 
     # set default options if None is provided
     if(options == None):
         options = DefaultOptOptions
     
+    pre_num = 0
+    if os.path.isfile(savefile):
+        with open(savefile, 'rb') as f:
+            previous = pickle.load(f)
+        pre_num = previous['x'].shape[0]
+
     count = int(np.ceil(ntr/batch))
     hist = []
     errh = []
@@ -262,6 +269,17 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                 else:
                     e_tol_p = e_tol
                 en_etol.append([en, e_tol_p, added])
+
+            # save progress
+            if rank == 0 and savefile is not None:
+                prog_save = {}
+                prog_save['x'] = t0[-pre_num-added:,:]
+                prog_save['f'] = f0[-pre_num-added:,:]
+                prog_save['g'] = g0[-pre_num-added:,:]
+                prog_save['d3'] = np.array(en_etol)
+                with open(savefile, 'wb') as f:
+                    pickle.dump(prog_save, f)
+
             if(rcrit.options["print_iter"]):
                 print_mpi(f"o       Adaptation Step {i}, {batch_use[i]} Points Added, {model.training_points[None][0][0].shape[0]} Total", end='')
                 if tol_condition:
@@ -271,6 +289,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                 else:
                     print_mpi('')
             # replace criteria
+
 
             # import pdb; pdb.set_trace()
             # convergence check

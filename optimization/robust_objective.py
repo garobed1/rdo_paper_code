@@ -8,6 +8,7 @@ from infill.getxnew import adaptivesampling
 from infill.refinement_picker import GetCriteria
 from smt.utils.options_dictionary import OptionsDictionary
 from utils.sutils import convert_to_smt_grads, print_mpi
+import os, sys, pickle
 
 # this one better suited for surrogate model
 from mpi4py import MPI
@@ -113,7 +114,7 @@ class RobustSampler():
 
         self.initialize()
 
-    def initialize(self):
+    def initialize(self, reset=False):
         # run sampler for the first time on creation
         pdfs = self.options["probability_functions"]
         xlimits = self.options["xlimits"]
@@ -131,16 +132,29 @@ class RobustSampler():
         self.scales = scales
 
         self._initialize()
-        self.generate_uncertain_points(self.N)    
+
+        if not reset:
+            self.generate_uncertain_points(self.N)    
+        else:
+            self.current_samples = defaultdict(dict)
+            self.history = {}
+            self.design_history = []
+            self.nested_ref_ind = None #list of indices of current iteration that existed in previous
+            self.func_computed = False #do we have function data at the samples?
+            self.grad_computed = False #do we have gradient data at the samples?
+            self.stop_generating = True
+            self.dont_reset = False #for adaptive sampler, don't reset attributes if we've computed them through sampling
+            self._attribute_reset()
+            self.iter_max = -1
+
+            self.comp_track = 0 #track total number of evaluations since instantiation
+            self.grad_track = 0
 
 
     """
     Start of methods to override
     """
     def _initialize(self):
-        
-        
-
         
         # run sampler for the first time on creation
         xlimits = self.options["xlimits"]
@@ -171,7 +185,7 @@ class RobustSampler():
 
         return tx
 
-    def _refine_sample(self, N, e_tol=None):
+    def _refine_sample(self, N, e_tol=None, resume=None):
         tx = self.current_samples['x']
         noise = self.options["design_noise"]
 
@@ -283,7 +297,7 @@ class RobustSampler():
 
         return 1
 
-    def refine_uncertain_points(self, N, tol=None, func=None, model=None):
+    def refine_uncertain_points(self, N, tol=None, func=None, model=None, resume=None):
         """
         Second of two functions that will increment the sampling iteration
         Add more UQ points to the current design. Usually this is nested
@@ -307,7 +321,7 @@ class RobustSampler():
         tx = None
         log = None
         # if rank == 0:
-        tx, log = self._refine_sample(N, e_tol=tol)
+        tx, log = self._refine_sample(N, e_tol=tol, resume=resume)
 
         # archive previous dataset
         self._internal_save_state(refine=True)
@@ -559,7 +573,7 @@ class CollocationSampler(RobustSampler):
         # import pdb; pdb.set_trace()
         return tx
 
-    def _refine_sample(self, N, e_tol=None):
+    def _refine_sample(self, N, e_tol=None, resume=None):
         N_old = self.N
 
         if isinstance(N, int):
@@ -692,7 +706,7 @@ class AdaptiveSampler(RobustSampler):
         return tx
 
 
-    def _refine_sample(self, N, e_tol=None):
+    def _refine_sample(self, N, e_tol=None, resume=None):
         
         max_batch = self.options['max_batch']
         as_options = self.options['as_options']
@@ -707,6 +721,43 @@ class AdaptiveSampler(RobustSampler):
         sset = self.options['criteria']
         # self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
         #                          bounds, None, self.x_u_ind)
+
+        # determine how many point to sample adaptively
+        N_use = N
+        N_added = 0
+        if e_tol is not None:
+            N_use = min(N, self.options["max_adapt"])
+        N_remain = N - N_use
+        batch_use = max_batch
+        if N_use < max_batch:
+            batch_use = N_use
+        N_before = self.model.training_points[None][0][0].shape[0]
+
+        # if resuming
+        progress = None
+        # import pdb; pdb.set_trace()
+        if resume is not None:
+            if os.path.isfile(resume):
+                with open(resume, 'rb') as f:
+                    progress = pickle.load(f)
+                N_added = progress['x'].shape[0] - N_before
+                N_use = N_use - N_added
+
+                # add back training points
+                t0 = self.model.training_points[None][0][0]
+                f0 = self.model.training_points[None][0][1]
+                g0 = convert_to_smt_grads(self.model)
+
+                # add points
+                t0 = np.append(t0, progress['x'], axis=0)
+                f0 = np.append(f0, progress['f'], axis=0)
+                g0 = np.append(g0, progress['g'], axis=0)
+
+                # train
+                self.model.set_training_values(t0, f0)
+                convert_to_smt_grads(self.model, t0, g0)
+                self.model.train()
+
         self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
                                  bounds, self.options["probability_functions"], self.x_u_ind)
         if not self.options['full_refine']:
@@ -714,26 +765,28 @@ class AdaptiveSampler(RobustSampler):
             self.rcrit.set_static(self.x_d_cur[0,:])
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
-        N_before = modelset.training_points[None][0][0].shape[0]
 
         # func set in self.func, should not be none
         if self.func == None:
             raise ValueError("func not set in AdaptiveSampler")
 
-        # determine how many point to sample adaptively
-        N_use = N
-        if e_tol is not None:
-            N_use = min(N, self.options["max_adapt"])
-        N_remain = N - N_use
-        batch_use = max_batch
-        if N_use < max_batch:
-            batch_use = N_use
+        
+
 
         # perform adaptive sampling
         # import pdb; pdb.set_trace()
-        mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N_use, e_tol = e_tol, batch=batch_use, options=as_options)
+        if N_use > 0:
+            mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N_use, e_tol = e_tol, batch=batch_use, options=as_options, savefile=resume)
+            N_added += d1[-1][0][0].shape[0] - N_before
+            if resume is not None:
+                d3[:,2] += progress["d3"][-1, 2]
+                d3 = np.append(progress["d3"], d3, axis=0)
+        else:
+            mf = modelset
+            rF = self.rcrit
+            d3 = progress["d3"]
+        
         self.rcrit = rF
-        N_added = d1[-1][0][0].shape[0] - N_before
 
         # check if we've converged
         if e_tol is not None:
@@ -768,7 +821,7 @@ class AdaptiveSampler(RobustSampler):
                 mf.train()
 
                 # evaluate rcrit energy
-                d1.append(mf.training_points[None])
+                # d1.append(mf.training_points[None])
                 rF.initialize(mf, g0)
                 en = rF.get_energy(bounds)
 
@@ -779,6 +832,16 @@ class AdaptiveSampler(RobustSampler):
                     e_tol_p = copy.deepcopy(e_tol_h)
 
                 d3 = np.append(d3, np.array([[en, e_tol_p, N_added]]), axis=0)
+
+                if rank == 0:
+                    prog_save = {}
+                    prog_save['x'] = t0[-N_added:,:]
+                    prog_save['f'] = f0[-N_added:,:]
+                    prog_save['g'] = g0[-N_added:,:]
+                    prog_save['d3'] = d3
+                    with open(resume, 'wb') as f:
+                        pickle.dump(prog_save, f)
+
                 converged = d3[-1,0] < d3[-1,1]
                 print_mpi(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")
                 c += 1

@@ -10,6 +10,7 @@ from utils.sutils import print_mpi
 from optimization.trust_bound_comp import TrustBound
 from collections import OrderedDict
 import pickle
+import os, sys
 from smt.utils.options_dictionary import OptionsDictionary
 
 import openmdao.api as om
@@ -198,6 +199,10 @@ class UncertainTrust(OptSubproblem):
 
 
         if rank == 0:
+            with open(f'{path}/{title}/optimality_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.gerr, f)
+            with open(f'{path}/{title}/feasability_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.gfea, f)
             with open(f'{path}/{title}/grad_lhs_{iter}.pickle', 'wb') as f:
                 pickle.dump(self.grad_lhs[-1], f)
             with open(f'{path}/{title}/grad_rhs_{iter}.pickle', 'wb') as f:
@@ -221,7 +226,98 @@ class UncertainTrust(OptSubproblem):
             with open(f'{path}/{title}/prob_model_points_{iter}.pickle', 'wb') as f:
                 pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
 
+            # surrogate evaluation points, for consistency
+            with open(f'{path}/{title}/surr_eval.pickle', 'wb') as f:
+                pickle.dump(self.prob_model.model.stat.surr_eval, f)
+
+            # so we know where to start from
+            with open(f'{path}/{title}/previous_iter.pickle', 'wb') as f:
+                pickle.dump(iter, f)
+
+    # search for the last iteration and load that
+    def _load_last_iteration(self):
+
+        title = self.title
+        path = self.path
+
+        k = 0
+        if os.path.isfile(f'{path}/{title}/previous_iter.pickle'):
+
+            # if rank == 0:
+            with open(f'{path}/{title}/previous_iter.pickle', 'rb') as f:
+                k = pickle.load(f)
         
+            # get surrogate evaluations
+            with open(f'{path}/{title}/surr_eval.pickle', 'rb') as f:
+                self.prob_model.model.stat.surr_eval = pickle.load(f)
+
+            # check if refining as well
+            with open(f'{path}/{title}/refining.pickle', 'rb') as f:
+                refining = pickle.load(f)
+            
+
+            k = comm.bcast(k)
+            refining = comm.bcast(refining)
+
+
+            self._load_iteration(k)
+
+            k += 1
+
+        # return the outer iteration counter
+        return k
+
+    # load information from the last iteration and start from there
+    def _load_iteration(self, iter):
+
+        title = self.title
+        path = self.path
+
+        # if rank == 0:
+        with open(f'{path}/{title}/optimality_{iter}.pickle', 'rb') as f:
+            self.gerr = pickle.load(f)
+        with open(f'{path}/{title}/feasability_{iter}.pickle', 'rb') as f:
+            self.gfea = pickle.load(f)
+        with open(f'{path}/{title}/grad_lhs_{iter}.pickle', 'rb') as f:
+            self.grad_lhs.append(pickle.load(f))
+        with open(f'{path}/{title}/grad_rhs_{iter}.pickle', 'rb') as f:
+            self.grad_rhs.append(pickle.load(f))
+        with open(f'{path}/{title}/radii_{iter}.pickle', 'rb') as f:
+            self.radii.append(pickle.load(f))
+        with open(f'{path}/{title}/realizations_{iter}.pickle', 'rb') as f:
+            self.realizations.append(pickle.load(f))
+        with open(f'{path}/{title}/areds_{iter}.pickle', 'rb') as f:
+            self.areds.append(pickle.load(f))
+        with open(f'{path}/{title}/preds_{iter}.pickle', 'rb') as f:
+            self.preds.append(pickle.load(f))
+        with open(f'{path}/{title}/loc_{iter}.pickle', 'rb') as f:
+            self.loc.append(pickle.load(f))
+        with open(f'{path}/{title}/models_{iter}.pickle', 'rb') as f:
+            self.models.append(pickle.load(f))
+        with open(f'{path}/{title}/reflog_{iter}.pickle', 'rb') as f:
+            self.reflog.append(pickle.load(f))
+        # with open(f'{path}/{title}/prob_truth_points_{iter}.pickle', 'rb') as f:
+        #     # pickle.dump(self.prob_truth.model.stat.sampler.current_samples, f)
+        #     ptcur = pickle.load(f)
+            
+        # rebuild sampler object
+        dvsettings = self.prob_model.model.get_design_vars()
+        dvsize = get_om_design_size(dvsettings)
+        for i in range(iter + 1):
+
+            with open(f'{path}/{title}/loc_{i}.pickle', 'rb') as f:
+                # pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
+                lcur = pickle.load(f)
+
+            with open(f'{path}/{title}/prob_model_points_{i}.pickle', 'rb') as f:
+                # pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
+                pmcur = pickle.load(f)
+
+            self.prob_model.model.stat.sampler.initialize(do_not_initialize=True)
+            self.prob_model.model.stat.sampler.set_design(om_dict_to_flat_array(lcur, dvsettings, dvsize))
+            self.prob_model.model.stat.sampler.add_data(pmcur, replace_current=True)
+        
+        self.prob_model.model.stat.surrogate = self.models[-1]
 
     def solve_full(self):
 
@@ -294,35 +390,28 @@ class UncertainTrust(OptSubproblem):
         if self.prob_model.driver._cons:
             self.have_cons = True
 
+        # optimization index
+        k = 0
    
-        # initial guess in dict format, whatever the current state of the OM system is
-        z0 = self.prob_model.driver.get_design_var_values()
-        # DICT TO ARRAY (OR NOT)
-
-        # design variable meta settings
-        dvsettings = self.prob_model.model.get_design_vars()
-        dvsize = get_om_design_size(dvsettings)
+        # ensure that we are not in refining mode to start
+        refining = False
 
         # flagged for failed optimization
         fail = 0
         succ = 0
+        
+        # design variable meta settings
+        dvsettings = self.prob_model.model.get_design_vars()
+        dvsize = get_om_design_size(dvsettings)
 
-        # optimization index
-        k = 0
 
         # region movement index (only incremented if we accept a step)
+        # deprecated use
         tsteps = 0
 
-        # TODO: make parallel, starting with printing only on rank 0
         if self.options["print"]:
             fetext = '-'
             getext = '-'
-
-        # store error measures, including the first one
-        gerr0 = 0
-        ftru = None
-        ferr = 1e6
-        self.gerr = 1e6
 
         # get DV bounds
         dvbl = {}
@@ -333,42 +422,79 @@ class UncertainTrust(OptSubproblem):
             dvbu[name] = copy.deepcopy(dvsettings[name]['upper'])
             dvsc[name] = dvbu[name] - dvbl[name]
 
-        # we assume that fidelity belongs to the top level system
-        # calling it stat for now
-        self.reflevel.append(self.prob_model.model.stat.get_fidelity())
 
-        # initialize trust radius
-        trust_radius = initial_trust_radius
-        zk = z0
+        ###
+        # try loading the previous state
+        ###
+        k = self._load_last_iteration()
 
-        # validate the first point before starting
-        if not self.options["model_grad_err_est"]:
-            self._eval_truth(zk)
-            ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
-            
-            # Lagrangian, Optimality, Feasability
-            if con_test:
-                self.gtru, self.gerr, self.gfea, dummy = grad_opt_feas(self.prob_truth, self.have_cons, self.ctol)
-            else:
-                self.gtru = self.prob_truth.compute_totals(return_format='array')
-                self.gerr = np.linalg.norm(self.gtru)
+        # if no previous iterations were found, start from scratch
+        if k == 0:
+            # initial guess in dict format, whatever the current state of the OM system is
+            z0 = self.prob_model.driver.get_design_var_values()
 
-            gerr0 += self.gerr
-            self.grange = gerr0 - self.gtol
-            if self.options["print"]:
-                getext = str(self.gerr)
+            # store error measures, including the first one
+            gerr0 = 0
+            ftru = None
+            ferr = 1e6
+            self.gerr = 1e6
 
-        self.grad_lhs.append(None)
-        self.grad_rhs.append(None)
-        self.radii.append(trust_radius)
-        self.realizations.append(self.prob_model.model.stat.get_fidelity())
-        self.areds.append(None)
-        self.preds.append(None)
-        self.loc.append(zk)
 
+            # we assume that fidelity belongs to the top level system
+            # calling it stat for now
+            self.reflevel.append(self.prob_model.model.stat.get_fidelity())
+
+            # initialize trust radius
+            trust_radius = initial_trust_radius
+            zk = z0
+
+            # validate the first point before starting
+            if not self.options["model_grad_err_est"]:
+                self._eval_truth(zk)
+                ftru = copy.deepcopy(self.prob_truth.get_val(self.prob_outs[0]))
+
+                # Lagrangian, Optimality, Feasability
+                if con_test:
+                    self.gtru, self.gerr, self.gfea, dummy = grad_opt_feas(self.prob_truth, self.have_cons, self.ctol)
+                else:
+                    self.gtru = self.prob_truth.compute_totals(return_format='array')
+                    self.gerr = np.linalg.norm(self.gtru)
+
+                gerr0 += self.gerr
+                self.grange = gerr0 - self.gtol
+                if self.options["print"]:
+                    getext = str(self.gerr)
+
+            self.grad_lhs.append(None)
+            self.grad_rhs.append(None)
+            self.radii.append(trust_radius)
+            self.realizations.append(self.prob_model.model.stat.get_fidelity())
+            self.areds.append(None)
+            self.preds.append(None)
+            self.loc.append(zk)
+
+        else:
+            # NOTE: WONT WORK WITHOUT model_grad_err_est
+
+            # last design iteration
+            zk = self.loc[-1]
+            om_dict_to_flat_array
+            trust_radius = self.radii[-1]
+
+
+            # we assume that fidelity belongs to the top level system
+            # calling it stat for now
+            self.reflevel.append(self.prob_model.model.stat.get_fidelity())
+
+            # store error measures, including the first one
+            gerr0 = 0
+            ftru = None
+            ferr = 1e6
+            # gmod, self.gerr, self.gfea, duals = grad_opt_feas(self.prob_model, self.have_cons, self.ctol)
 
         print_mpi(f"___________________________________________________________________________")
         print_mpi(f"Optimization Parameters")
+        print_mpi(f"Current Step               = {k}")
         print_mpi(f"Gradient Tolerance         = {self.gtol}")
         print_mpi(f"Step Tolerance             = {stol}")
         print_mpi(f"Maximum Outer Iterations   = {miter}")
@@ -380,6 +506,11 @@ class UncertainTrust(OptSubproblem):
         print_mpi(f"___________________________________________________________________________")
         print_mpi(f"Beginning Full Optimization-Under-Uncertainty Loop")
 
+
+
+        # =================================================================
+        # Begin
+        # =================================================================
         while (self.gerr > self.gtol) and (k < miter):
             fail = 0
             if self.options["print"]:
@@ -478,8 +609,18 @@ class UncertainTrust(OptSubproblem):
                 rhs0 = min(gerrm, self.sdist) #use unscaled sdist, since the lagrangian won't be scaled either
                 # xi_calc = lhs0/rhs0
 
+                # if we time out during refinement, ensure that we know that when restarting
+                refining = True
+                if rank == 0:
+                    with open(f'{self.path}/{self.title}/refining.pickle', 'wb') as f:
+                        pickle.dump(refining, f)
+
                 lhs, rhs = self.model_refiner(lhs0, rhs0)
 
+                refining = False
+                if rank == 0:
+                    with open(f'{self.path}/{self.title}/refining.pickle', 'wb') as f:
+                        pickle.dump(refining, f)
                 
 
 
@@ -639,25 +780,32 @@ class UncertainTrust(OptSubproblem):
             
             
                 lhs, rhs = self.model_refiner()
+            
+            
+            
             # store important stuff for plotting
-            k += 1            
             self.outer_iter = k
+            self.gfea = gfeam
             self.grad_lhs.append(lhs)
             self.grad_rhs.append(rhs)
             self.radii.append(trust_radius)
             self.realizations.append(self.prob_model.model.stat.get_fidelity())
             self.areds.append(actual_reduction)
             self.preds.append(predicted_reduction)
-            self.loc.append( om_dict_to_flat_array(zk, dvsettings, dvsize))
+            # self.loc.append( om_dict_to_flat_array(zk, dvsettings, dvsize))
+            self.loc.append(zk)
             if self.prob_model.model.stat.surrogate is not None:
                 self.models.append(self.prob_model.model.stat.surrogate)
             print_mpi(f"O       Radius: {trust_radius}")
             print_mpi(f"O       LHS: {lhs}")
             print_mpi(f"O       RHS: {rhs}")
             print_mpi(f"O       xi*RHS - LHS = {rhs*self.xi - lhs}")
-            # 
-
+            
+            
+            # save iteration info to disk
             self._save_iteration(k)
+
+            k += 1            
 
             #If g truth metrics are not met, 
             if self.gerr < self.gtol and gfeam < self.ctol and not self.options["inexact_gradient_only"]:
@@ -716,7 +864,8 @@ class UncertainTrust(OptSubproblem):
         self.realizations.append(self.prob_model.model.stat.get_fidelity())
         self.areds.append(actual_reduction)
         self.preds.append(predicted_reduction)
-        self.loc.append(om_dict_to_flat_array(zk, dvsettings, dvsize))
+        # self.loc.append(om_dict_to_flat_array(zk, dvsettings, dvsize))
+        self.loc.append(zk)
         if self.prob_model.model.stat.surrogate is not None:
             self.models.append(self.prob_model.model.stat.surrogate)
 
@@ -819,7 +968,7 @@ class UncertainTrust(OptSubproblem):
                         return self.cur_tol
 
                     # refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
-                    refjump, reflog = self.prob_model.model.stat.refine_model(refjump_max, xirhs)
+                    refjump, reflog = self.prob_model.model.stat.refine_model(refjump_max, xirhs, f'{self.path}/{self.title}/ref_progress.pickle')
                     gerrm = reflog[-1,1]/self.xi
                 else:
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump)
