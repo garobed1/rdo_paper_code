@@ -15,7 +15,7 @@ rscale = 5.5
 rho = 5000. # NOTE: Only applies to criteria
 rsca = True  # hess function value scale
 vsca = False # hess cell volume scale
-
+min_contribution=1e-14
 ### FOR POU SFCVT
 # rtype =  "pousfcvt"
 # opt = 'SLSQP' #for SFCVT constraint

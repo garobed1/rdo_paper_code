@@ -346,6 +346,8 @@ probm.model.add_objective("mass_only.test.mass")
 
 if trust_region_bound: #anything but 0
     sub_optimizer = UncertainTrust(prob_model=probm, prob_truth=probt, 
+                                    title=title,
+                                    path='/' + root + '/' + path,
                                     xi=xi,
                                     initial_trust_radius=initial_trust_radius,
                                     trust_option=trust_region_bound,
@@ -359,7 +361,9 @@ if trust_region_bound: #anything but 0
                                     truth_func_err_est_max=approximate_truth_max,
                                     trust_increase_terminate=trust_increase_terminate)
 else:
-    sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
+    sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt,
+                                        title=title,
+                                    path='/' + root + '/' + path, 
                                     flat_refinement=jump, 
                                     max_iter=max_outer,
                                     use_truth_to_train=use_truth_to_train,

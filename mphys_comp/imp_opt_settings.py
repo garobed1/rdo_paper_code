@@ -69,7 +69,7 @@ if not approximate_truth:
 else:
     N_t = 100*u_dim
 N_t = 3*u_dim
-N_m = 8
+N_m = 4
 jump = 10
 # model sampling
 sample_type = 'Adaptive'
