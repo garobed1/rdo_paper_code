@@ -141,7 +141,7 @@ class ASCriteria():
             for i in range(len(pdf_list)):
                 if not isinstance(pdf_list[i], float):
                     self.pdfs[i] = pdf_list[i]
-                    
+        self.pdf_name_list = pdf_name_list
 
         # flag for speeding up energy calculations if possible
         self.energy_mode = False
@@ -257,7 +257,10 @@ class ASCriteria():
                 weight *= 1.0
             else:
                 try:
-                    weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
+                    if self.pdf_name_list[j] == 'uniform':
+                        weight *= self.pdfs[j].pdf(xw[:,j:j+1])[:,0]
+                    else:
+                        weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
                 except:
                     import pdb; pdb.set_trace()
                 area *= bounds[j,1] - bounds[j,0]
@@ -378,6 +381,7 @@ class ASCriteria():
             x_eff[:,fix_ind] = xfix
 
             y = self.evaluate(x_eff, bounds, direction)
+            
             return y
 
         self.energy_mode = True
@@ -389,7 +393,7 @@ class ASCriteria():
             energy = -np.linalg.norm(term[sub_ind])
         else:
             energy = term
-
+        
         # multiply by volume ?
         # vol = 1
         # for i in sub_ind:

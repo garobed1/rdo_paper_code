@@ -379,6 +379,7 @@ def _gen_var_lists(pdfs, xlimits):
         # no pdf, fixed at the float given
         elif isinstance(pdfs[j], float): # consider these variables to be fixed (e.g. design vars)
             pdf_list.append(pdfs[j])
+            pdf_name_list.append('none')
             static_list.append(j)
 
         # treat as if uniform

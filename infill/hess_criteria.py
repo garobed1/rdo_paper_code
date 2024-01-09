@@ -290,7 +290,7 @@ class HessianRefine(ASCriteria):
         
                 y_[k] = numer/denom
                 c += 1
-            # import pdb; pdb.set_trace()
+            
 
         else: 
             c = 0
@@ -321,8 +321,7 @@ class HessianRefine(ASCriteria):
         y_ = comm.allreduce(y_)
         ans = -abs(y_)
 
-
-
+        
         """
         from stack: do this
         
@@ -339,7 +338,8 @@ class HessianRefine(ASCriteria):
         , x2=0, x3=1.
         
         """
-        # import pdb; pdb.set_trace()
+        # if self.energy_mode:
+        #     import pdb; pdb.set_trace()
         # for batches, loop over already added points to prevent clustering
         # this should only work for 
         for i in range(dir):

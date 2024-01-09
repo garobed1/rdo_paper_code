@@ -270,6 +270,8 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
                     e_tol_p = e_tol
                 en_etol.append([en, e_tol_p, added])
 
+            
+
             # save progress
             if rank == 0 and savefile is not None:
                 prog_save = {}

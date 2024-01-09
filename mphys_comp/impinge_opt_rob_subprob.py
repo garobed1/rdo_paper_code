@@ -72,8 +72,8 @@ xlimits[:ndv,0] = 0.0004
 xlimits[:ndv,1] = 0.007
 xlimits[ndv,0] = 23.
 xlimits[ndv,1] = 27.
-xlimits[ndv+1,0] = 1.5
-xlimits[ndv+1,1] = 1.9
+xlimits[ndv+1,0] = 2.5
+xlimits[ndv+1,1] = 2.9
 
 # parse command line arguments
 parser = argparse.ArgumentParser()
@@ -381,7 +381,7 @@ sub_optimizer.prob_model.set_val("stat.x_d", x_init)
 sub_optimizer.prob_truth.set_val("x_d", x_init)
 sub_optimizer.prob_model.set_val("x_d", x_init)
 # om.n2(probm)
-sub_optimizer.prob_truth.run_model()
+# sub_optimizer.prob_truth.run_model()
 sub_optimizer.prob_model.run_model()
 
 # get_last_case = False
