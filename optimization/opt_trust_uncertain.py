@@ -313,7 +313,7 @@ class UncertainTrust(OptSubproblem):
                 # pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
                 pmcur = pickle.load(f)
 
-            self.prob_model.model.stat.sampler.initialize(do_not_initialize=True)
+            self.prob_model.model.stat.sampler.initialize(reset=True)
             self.prob_model.model.stat.sampler.set_design(om_dict_to_flat_array(lcur, dvsettings, dvsize))
             self.prob_model.model.stat.sampler.add_data(pmcur, replace_current=True)
         
