@@ -779,8 +779,11 @@ class AdaptiveSampler(RobustSampler):
             mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N_use, e_tol = e_tol, batch=batch_use, options=as_options, savefile=resume)
             N_added += d1[-1][0][0].shape[0] - N_before
             if resume is not None:
-                d3[:,2] += progress["d3"][-1, 2]
-                d3 = np.append(progress["d3"], d3, axis=0)
+                try:
+                    d3[:,2] += progress["d3"][-1, 2]
+                    d3 = np.append(progress["d3"], d3, axis=0)
+                except:
+                    pass
         else:
             mf = modelset
             rF = self.rcrit
@@ -845,7 +848,12 @@ class AdaptiveSampler(RobustSampler):
                 converged = d3[-1,0] < d3[-1,1]
                 print_mpi(f"o       Post-Adapt Step {c}, {N_mc} Points Added, {mf.training_points[None][0][0].shape[0]} Total, Energy = {en}, Target = {e_tol_p}")
                 c += 1
-
+            
+        # if we made it this far, delete ref_progress
+        try:
+            os.remove(resume)
+        except:
+            pass
 
         # set evaluations internally
         tx = mf.training_points[None][0][0]

@@ -269,13 +269,23 @@ class HessianRefine(ASCriteria):
                 fac = fac_all[neighbors]
 
                 # work = X_cont[k,:] - trx[:self.ntr,:]
+                # work = X_cont[k,:] - xc
+                # # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                # dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)#np.sqrt(D[0][i] + delta)
+                # # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
+                # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H[neighbors]), fac) # NEWNEWNEW
+                # expfac = np.exp(-self.rho2*(dist-mindist[k]))
+                # numer = np.einsum('ij,i->j', local, expfac)
+                # denom = np.sum(expfac)
+
+                # work = X_cont[k,:] - trx[:self.ntr,:]
                 work = X_cont[k,:] - xc
                 # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
-                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)#np.sqrt(D[0][i] + delta)
-                # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
-                local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H[neighbors]), fac) # NEWNEWNEW
-                expfac = np.exp(-self.rho2*(dist-mindist[k]))
-                numer = np.einsum('ij,i->j', local, expfac)
+                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
+                # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                numer = np.dot(local, expfac)
                 denom = np.sum(expfac)
         
                 y_[k] = numer/denom
@@ -570,8 +580,8 @@ class HessianGradientRefine(HessianRefine):
         if self.options["return_rescaled"]:
             terms = np.einsum('j,ij->ij',self.y_sca/self.x_sca, terms)
 
-        if self.energy_mode:
-            return terms[:,ind_use]
+        # if self.energy_mode:
+        #     return terms[:,ind_use]
 
         avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         return avg_terms
@@ -591,7 +601,7 @@ class HessianGradientRefine(HessianRefine):
         terms = np.einsum('j,ij->ij',scaler, terms)
         # davg_terms[:,ind_use] = np.einsum('ij,ijk,k->ij',terms[:,ind_use], h[:,:,ind_use][:,ind_use,:], scaler[ind_use])
         xH = np.einsum('j,ijk->ijk',scaler, h)
-        davg_terms = np.einsum('ikj,ij->ij',xH[:,ind_use,:], terms[:,ind_use])
+        davg_terms = np.einsum('ikj,ik->ij',xH[:,ind_use,:], terms[:,ind_use])
         avg_terms = np.linalg.norm(terms[:,ind_use], axis=1)
         davg_terms = np.einsum('ij,i->ij', davg_terms, 1./avg_terms)
         # import pdb; pdb.set_trace()
