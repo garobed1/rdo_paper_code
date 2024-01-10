@@ -801,6 +801,8 @@ class AdaptiveSampler(RobustSampler):
             # if not, add Monte Carlo points until tol is satisfied or N is reached
             # give it at most 10 iterations
             N_mc = int((N-N_added)/50)
+            if size > 1:
+                N_mc = size*2 # if parallel, do this instead
             c = 0
             while not converged and N_added < N:
                 t0 = mf.training_points[None][0][0]

@@ -6,7 +6,7 @@ stype = "pouhess"   #surrogate type
 
 ### FOR POU HESS
 rtype =  "hessgrad"
-opt = 'L-BFGS-B' #'SLSQP'#
+opt = 'SLSQP'#'L-BFGS-B' #'SLSQP'#
 local = True
 gopt = 'ga' #'brute'
 localswitch = True
@@ -43,7 +43,7 @@ tb = [1e-6, 2e+1]
 nt0  = 10       #initial design size
 ntr = 40      #number of points to add
 ntot = nt0 + ntr    #total number of points
-batch = 1#dim*2        #batch size for refinement, as a percentage of ntr
+batch = 10#dim*2        #batch size for refinement, as a percentage of ntr
 mstarttype = 2            # 0: No multistart
                           # 1: Start at the best out of a number of samples
                           # 2: Perform multiple optimizations
