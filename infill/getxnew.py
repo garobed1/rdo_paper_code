@@ -261,7 +261,7 @@ def adaptivesampling(func, model0, rcrit, bounds, ntr, e_tol=None, batch=1, opti
             if rcrit.options["print_energy"]:
                 en = rcrit.get_energy(bounds)
                 if tol_func:
-                    if i % 5 == 0:
+                    if i % 5 == 0 or batch > 1: #update every time if we're batching
                         e_tol_p = e_tol(model)
                         e_tol_h = copy.deepcopy(e_tol_p)
                     else:

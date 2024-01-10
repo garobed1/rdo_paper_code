@@ -158,6 +158,13 @@ class UncertainTrust(OptSubproblem):
             types=bool,
             desc="if true, do not determine convergence based on truth model gradient, use the inexact gradient condition only"
         )
+
+        declare(
+            "tol_ignore_sdist", 
+            default=False, 
+            types=bool,
+            desc="if true, instead of min(gerr, sdist), just do gerr"
+        )
         
         declare(
             "ref_strategy", 
@@ -607,6 +614,8 @@ class UncertainTrust(OptSubproblem):
                 # lhs0 = lhs = self.prob_model.model.stat.sampler.rcrit.get_energy()#np.linalg.norm(gmod-gtru)
                 lhs0 = None
                 rhs0 = min(gerrm, self.sdist) #use unscaled sdist, since the lagrangian won't be scaled either
+                if self.options["tol_ignore_sdist"]:
+                     rhs0 = gerrm
                 # xi_calc = lhs0/rhs0
 
                 # if we time out during refinement, ensure that we know that when restarting
@@ -745,6 +754,8 @@ class UncertainTrust(OptSubproblem):
 
                 lhs0 = np.linalg.norm(gmod-self.gtru)
                 rhs0 = min(gerrm, self.sdist)
+                if self.options["tol_ignore_sdist"]:
+                     rhs0 = gerrm
                 xi_calc = lhs0/rhs0
                 # def compute_lhs():
             else:
@@ -962,6 +973,8 @@ class UncertainTrust(OptSubproblem):
                                 gerrm = np.linalg.norm(gmod)
 
                             new_tol = self.xi*min(self.sdist, gerrm)
+                            if self.options["tol_ignore_sdist"]:
+                                new_tol = self.xi*gerrm
                             if abs(new_tol - self.cur_tol) < 1e-6 and not self.no_stall:
                                 self.stop_update = True
                             self.cur_tol = new_tol
@@ -987,6 +1000,8 @@ class UncertainTrust(OptSubproblem):
                     # lhs = self.prob_model.model.stat.sampler.rcrit.get_energy(self.prob_model.model.stat.sampler.xlimits)
                     lhs = reflog[-1,0]
                 rhs = min(gerrm, self.sdist)
+                if self.options["tol_ignore_sdist"]:
+                    rhs = gerrm
 
                 if self.options["print"]:
                     print_mpi(f"o       Inexact Iter: {rk} | Energy = {estat}| Levels = {self.reflevel}| LHS = {lhs}| RHS: {rhs} | xi*RHS - LHS = {rhs*self.xi - lhs}")

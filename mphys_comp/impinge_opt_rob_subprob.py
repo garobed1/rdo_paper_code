@@ -74,6 +74,7 @@ xlimits[ndv,0] = 23.
 xlimits[ndv,1] = 27.
 xlimits[ndv+1,0] = 2.5
 xlimits[ndv+1,1] = 2.9
+tol_ignore_sdist = True
 
 # parse command line arguments
 parser = argparse.ArgumentParser()
@@ -359,7 +360,8 @@ if trust_region_bound: #anything but 0
                                     model_grad_err_est=approximate_model,
                                     truth_func_err_est=approximate_truth,
                                     truth_func_err_est_max=approximate_truth_max,
-                                    trust_increase_terminate=trust_increase_terminate)
+                                    trust_increase_terminate=trust_increase_terminate,
+                                    tol_ignore_sdist=tol_ignore_sdist)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt,
                                         title=title,
