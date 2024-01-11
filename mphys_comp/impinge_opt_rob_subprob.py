@@ -45,20 +45,19 @@ rank = comm.Get_rank()
 # smax_list = nsweep*[5e5] + nsweep*[1e6] + nsweep*[5e5] +  nsweep*[1e6] 
 # E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[54500000000] + nsweep*[54500000000]
 
-ndv = 4 # number of thickness variables
+ndv = 7 # number of thickness variables
 s = 25. # shock angle
 M0 = 1.8 # upstream mach number
 smax = 5e5 # max stress constraint
 E = 69000000000
-ndv = 4
 # eta_use = 1.0
 
-# home = '/gpfs/u/home/ODLC/ODLCbdnn/'
-# barn = 'barn'
+home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+barn = 'barn'
 # name = 'test_case_reload'
-home = '/home/garobed/'
-barn = ''
-mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
+# home = '/home/garobed/'
+# barn = ''
+# mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 # mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
 # mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 

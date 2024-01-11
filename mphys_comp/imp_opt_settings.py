@@ -2,7 +2,7 @@
 
 # name = 'betaex_trust_sc_demo'
 # name = 'nonadaptive_ouu_demo_1'
-name = 'second_robust_attempt_adapt'
+name = 'fourth_robust_attempt_adapt'
 path = '.'
 
 
@@ -44,7 +44,7 @@ design_noise_act = 0.0
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 0.1 #"""We're making this relative to the design bound scale"""
-xi = 0.1
+xi = 0.5
 # eta1
 # eta2
 # gamma1
@@ -69,7 +69,7 @@ if not approximate_truth:
 else:
     N_t = 100*u_dim
 N_t = 3*u_dim
-N_m = 10
+N_m = 48
 jump = 10
 # model sampling
 sample_type = 'Adaptive'
