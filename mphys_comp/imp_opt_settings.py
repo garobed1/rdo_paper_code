@@ -44,7 +44,7 @@ design_noise_act = 0.0
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 0.1 #"""We're making this relative to the design bound scale"""
-xi = 0.5
+xi = 1.0
 # eta1
 # eta2
 # gamma1
@@ -90,7 +90,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 40
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

@@ -90,14 +90,15 @@ class HessianRefine(ASCriteria):
             "min_contribution",
             1e-13,
             types=(float),
-            desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+            desc="If not 0.0, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
         )
 
         declare(
             "min_points",
-            4,
+            size-1,
+            # 4,
             types=int,
-            desc="If not None, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+            desc="Minimum number of points to compute distances to if min_contribution is active"
         )
 
 

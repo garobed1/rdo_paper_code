@@ -701,9 +701,10 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
     # only do this at the subproblem optima, don't do it while we're adding points to the surrogate
     if duals_given is None:
         duals = estimate_lagrange_multipliers2(obj, active_cons, dvs, totals)
+    # elif active_cons:
+    #     duals = estimate_lagrange_multipliers2(obj, active_cons, dvs, totals)
     else:
         duals = duals_given
-
     # optimality
     opt, grad = optimality2(responses, obj, active_cons, dvs, duals, totals)
 
@@ -714,4 +715,5 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         feas = l1_merit_function2(driver, penalty, feas_tol)
 
     #NOTE: replace totals with lagrangian grad?
+    
     return grad, opt, feas, duals

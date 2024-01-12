@@ -11,7 +11,7 @@ Only support this one robust quantity for the time being
 u_dim = 1
 d_dim = 1
 prob = 'betatestex'
-p_con = False
+p_con = True
 p_eq = None
 p_ub = 3.
 p_lb = None
@@ -87,7 +87,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 10
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

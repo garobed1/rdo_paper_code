@@ -271,6 +271,8 @@ class UncertainTrust(OptSubproblem):
 
             k += 1
 
+        # elif os.path.isfile(f'{path}/{title}/first_iter.pickle'): #in case 
+
         # return the outer iteration counter
         return k
 
@@ -945,7 +947,8 @@ class UncertainTrust(OptSubproblem):
             if lhs == None:
                 lhs = 1.e6
             reflog = None
-            while(lhs > self.xi*rhs and refjump < rcap): # self.reflevel[-1][-1]
+            # while(lhs > self.xi*rhs and refjump < rcap): # self.reflevel[-1][-1]
+            if 1: # self.reflevel[-1][-1]
                 rk += 1
                 refjump = rmin
                 estat = 'flat'
@@ -977,6 +980,18 @@ class UncertainTrust(OptSubproblem):
                                 new_tol = self.xi*gerrm
                             if abs(new_tol - self.cur_tol) < 1e-6 and not self.no_stall:
                                 self.stop_update = True
+                            # if constrained, we need to divide this by the appropriate dual
+                            # if the constraint isnt active, multiply by a large number
+
+                            # if the robust quantity is a constraint
+                            if 'stat.musigma' in self.prob_model.driver._cons:
+                                if 'stat.musigma' in self.duals:
+                                    # if new_tol > 1e-15:
+                                    #     import pdb; pdb.set_trace()
+                                    new_tol /= abs(self.duals['stat.musigma']) 
+                                else:
+                                    new_tol *= 1e8
+                                
                             self.cur_tol = new_tol
                         return self.cur_tol
 
