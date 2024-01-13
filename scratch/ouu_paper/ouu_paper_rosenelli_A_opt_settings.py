@@ -13,7 +13,7 @@ d_dim = 2
 prob = 'uellipse_foc'
 p_con = False
 p_eq = None
-p_ub = 3.
+p_ub = 0.
 p_lb = None
 
 # refinement threshold strategies

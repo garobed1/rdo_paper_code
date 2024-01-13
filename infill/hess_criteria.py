@@ -285,7 +285,7 @@ class HessianRefine(ASCriteria):
                 dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
                 # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
                 local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
-                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                expfac = np.exp(-self.rho2*(dist-mindist[k]))
                 numer = np.dot(local, expfac)
                 denom = np.sum(expfac)
         

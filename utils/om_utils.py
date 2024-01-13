@@ -716,5 +716,5 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         feas = l1_merit_function2(driver, penalty, feas_tol)
 
     #NOTE: replace totals with lagrangian grad?
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     return grad, opt, feas, duals
