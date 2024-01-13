@@ -357,10 +357,10 @@ class UncertainEllipse(Problem):
         self.xlimits[2, 1] = 3.
         # focus x (limit to right hand plane)
         self.xlimits[3, 0] = 0.
-        self.xlimits[3, 1] = 1.
+        self.xlimits[3, 1] = 0.4
         # focus y
-        self.xlimits[4, 0] = -1.
-        self.xlimits[4, 1] = 1.
+        self.xlimits[4, 0] = -0.2
+        self.xlimits[4, 1] = 0.2
         # location
         self.xlimits[5:7, 0] = -1.
         self.xlimits[5:7, 1] = 1.

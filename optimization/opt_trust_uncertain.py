@@ -985,6 +985,12 @@ class UncertainTrust(OptSubproblem):
 
                             # if the robust quantity is a constraint
                             if 'stat.musigma' in self.prob_model.driver._cons:
+                                # import pdb; pdb.set_trace()
+
+                                #NOTE: if we start with active constraints, but they turn off, 
+                                # because we keep duals constant, this doesn't go away
+                                # i think we want to keep this behavior, otherwise refinement quits
+                                # as soon as we're feasible again
                                 if 'stat.musigma' in self.duals:
                                     # if new_tol > 1e-15:
                                     #     import pdb; pdb.set_trace()

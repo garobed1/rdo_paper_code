@@ -79,10 +79,10 @@ def GetProblem(prob, dim, alpha = 8., use_design=False, fix_radius=None, fix_foc
         trueFunc = BetaRobust1D(ndim=dim)
     elif(prob == "betatestex"):
         trueFunc = BetaRobustEx1D(ndim=dim)
-    elif(prob == "uellipse"):
-        trueFunc = UncertainEllipse(fix_radius=fix_radius, fix_foci=fix_foci, fix_loc=fix_loc)
+    elif(prob == "uellipse_foc"):
+        trueFunc = UncertainEllipse(fix_radius=None, fix_foci=None)
     elif(prob == "uellipse_rad"):
-        trueFunc = UncertainEllipse(fix_radius=None, fix_foci=fix_foci, fix_loc=fix_loc)
+        trueFunc = UncertainEllipse(fix_radius=None)
     else:
         raise ValueError("Given problem not valid.")
 

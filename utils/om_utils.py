@@ -409,7 +409,7 @@ def optimality2(responses, obj, active_cons, dvs, duals, totals):
     optimality = np.linalg.norm(full_vec, np.inf)
 
     # if optimality > 1e-7:
-    #     import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     return optimality, full_vec
 
 
@@ -675,6 +675,7 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         duals = []
         return grad, opt, feas, duals
     
+    problem.run_model()
     driver = problem.driver
     model = problem.model
     dvs = driver._designvars
@@ -715,5 +716,5 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
         feas = l1_merit_function2(driver, penalty, feas_tol)
 
     #NOTE: replace totals with lagrangian grad?
-    
+    import pdb; pdb.set_trace()
     return grad, opt, feas, duals

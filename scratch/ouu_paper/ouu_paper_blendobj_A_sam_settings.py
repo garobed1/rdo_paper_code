@@ -16,7 +16,7 @@ rscale = 5.5
 rho = 50. # NOTE: Only applies to criteria
 # rho2 = 5000. # NOTE: USE FOR ENERGY ONLY?
 # NOTE: We'll use a separate rho = 5000 for energy
-
+min_contribution = 1e-14
 rsca = True  # hess function value scale
 vsca = False # hess cell volume scale
 

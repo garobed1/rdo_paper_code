@@ -271,7 +271,7 @@ probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 ### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
 if oset.prob == "toylinear":
     excomp = om.ExecComp('y = 10-x')
-elif oset.prob == "uellipse": #assume rosenbrock
+elif oset.prob == "uellipse_loc": #assume rosenbrock
     excomp = SMTComponent("rosenbrock", dim_base=2)
 elif oset.prob == "uellipse_rad": #assume rosenbrock
     excomp = SMTComponent("rosenbrock", dim_base=2)

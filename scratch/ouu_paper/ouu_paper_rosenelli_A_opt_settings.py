@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_blendobj_A'
+name = 'ouu_paper_rosenelli_A'
 path = '.'
 
 
@@ -8,9 +8,9 @@ path = '.'
 This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
-u_dim = 1
-d_dim = 1
-prob = 'betatestex'
+u_dim = 3
+d_dim = 2
+prob = 'uellipse_foc'
 p_con = False
 p_eq = None
 p_ub = 3.
@@ -66,7 +66,7 @@ if not approximate_truth:
 else:
     N_t = 100*u_dim
 # N_t = 500*u_dim
-N_m = 6
+N_m = 10
 jump = 10
 # model sampling
 sample_type = 'Adaptive'
@@ -83,7 +83,8 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
+import numpy as np
+pdfs = [0., 0., ['norm', np.sqrt(2), 0.06], ['uniform'], ['uniform']] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####

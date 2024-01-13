@@ -1,4 +1,5 @@
 # naming
+# name = 'test_blendcon_A'
 name = 'ouu_paper_blendcon_A'
 path = '.'
 
@@ -48,7 +49,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = 5.5
+x_init = 8.5
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -66,7 +67,7 @@ if not approximate_truth:
 else:
     N_t = 100*u_dim
 # N_t = 500*u_dim
-N_m = 6
+N_m = 10
 jump = 10
 # model sampling
 sample_type = 'Adaptive'

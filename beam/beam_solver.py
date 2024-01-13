@@ -256,10 +256,10 @@ class EulerBeamSolver():
         gm = max(g)
         esum = 0
         for i in range(self.Nelem+1):
-            esum += np.exp(rho*(g[i] - gm))
-            # esum += np.exp(rho*(g[i]/gm - 1.))
-        KS = gm + (1./rho)*np.log(esum)
-        # KS = 1. + (1./rho)*np.log(esum)
+            # esum += np.exp(rho*(g[i] - gm))
+            esum += np.exp(rho*(g[i]/gm - 1.))
+        # KS = gm + (1./rho)*np.log(esum)
+        KS = 1. + (1./rho)*np.log(esum)
         # import pdb; pdb.set_trace()
         return KS
     
@@ -285,10 +285,10 @@ class EulerBeamSolver():
         esum = 0
         desum = np.zeros(self.Nelem+1)
         for i in range(self.Nelem+1):
-            esum += np.exp(rho*(g[i] - gm))
-            # esum += np.exp(rho*(g[i]/gm - 1.))
-            desum[i] = rho*dg[i]*np.exp(rho*(g[i] - gm))
-            # desum[i] = rho*dg[i]*np.exp(rho*(g[i]/gm - 1.))/gm
+            # esum += np.exp(rho*(g[i] - gm))
+            esum += np.exp(rho*(g[i]/gm - 1.))
+            # desum[i] = rho*dg[i]*np.exp(rho*(g[i] - gm))
+            desum[i] = rho*dg[i]*np.exp(rho*(g[i]/gm - 1.))/gm
         # KS = gm + (1./rho)*np.log(esum)
         # KS = 1. + (1./rho)*np.log(esum)
         dKS = (1./rho)*(1./esum)*desum*dsigma_a
