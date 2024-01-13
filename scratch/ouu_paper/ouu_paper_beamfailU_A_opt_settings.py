@@ -35,7 +35,7 @@ retain_uncertain_points_T = True
 use_design_noise = False #NEW, ONLY IF USING SURR
 design_noise = 0.0
 design_noise_act = 0.0
-
+tol_ignore_sdist = True
 
 ##### trust region #####
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component

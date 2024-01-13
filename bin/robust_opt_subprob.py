@@ -139,6 +139,10 @@ approximate_truth = oset.approximate_truth
 approximate_truth_max = oset.approximate_truth_max
 trust_increase_terminate = oset.trust_increase_terminate
 xi = oset.xi
+try:
+    tol_ignore_sdist = oset.tol_ignore_sdist
+except:
+    tol_ignore_sdist = False
 
 ### SAMPLING STRATEGY ###
 sample_type_t = oset.sample_type_t
@@ -385,7 +389,8 @@ if trust_region_bound: #anything but 0
                                     model_grad_err_est=approximate_model,
                                     truth_func_err_est=approximate_truth,
                                     truth_func_err_est_max=approximate_truth_max,
-                                    trust_increase_terminate=trust_increase_terminate)
+                                    trust_increase_terminate=trust_increase_terminate,
+                                    tol_ignore_sdist=tol_ignore_sdist)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 
                                     title=title,

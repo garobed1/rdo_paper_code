@@ -2,7 +2,7 @@
 import numpy as np
 
 from collections import OrderedDict
-
+from utils.sutils import print_mpi
 #TODO: Function to convert om dicts to smt ordering
 
 # etc.
@@ -130,13 +130,13 @@ def l1_merit_function2(driver, penalty, feas_tol):
     con_violation = constraint_violation2(
         driver, driver._cons, con_vals, feas_tol)
 
-    print(f"merit con_violation: {con_violation}")
+    print_mpi(f"merit con_violation: {con_violation}")
     for error in con_violation.values():
-        print(f"merit error: {error}")
-        print(f"abs error: {np.absolute(error)}")
-        print(f"sum abs error: {np.sum(np.absolute(error))}")
-        print(f"phi: {phi}")
-        print(f"penalty: {penalty}")
+        print_mpi(f"merit error: {error}")
+        print_mpi(f"abs error: {np.absolute(error)}")
+        print_mpi(f"sum abs error: {np.sum(np.absolute(error))}")
+        print_mpi(f"phi: {phi}")
+        print_mpi(f"penalty: {penalty}")
         phi += penalty * np.sum(np.absolute(error))
 
     return phi
@@ -148,12 +148,12 @@ def get_active_constraints2(cons, con_vals, dvs, dv_vals, feas_tol, no_trust=Fal
         con_name = cons[con]['name']
         con_val = con_vals[con]
         if cons[con]['equals'] is not None:
-            # print(f"constraint {con} is equality!")
+            # print_mpi(f"constraint {con} is equality!")
             active_cons[con_name] = np.ones_like(con_val, dtype=bool)
         else:
             con_ub = cons[con].get("upper", np.inf)
             con_lb = cons[con].get("lower", -np.inf)
-            # print(f"{con} lower bound: {con_lb}, upper bound: {con_ub}, value: {con_vals[con]}")
+            # print_mpi(f"{con} lower bound: {con_lb}, upper bound: {con_ub}, value: {con_vals[con]}")
 
             # Initially assume all cons are inactive
             active_con = np.zeros_like(con_val, dtype=bool)
@@ -227,14 +227,14 @@ def constraint_violation2(driver, cons, con_vals, feas_tol):
         con_val = con_vals[con]
         if cons[con]['equals'] is not None:
             con_target = cons[con]["equals"]
-            print(f"{con} target: {con_target}, value: {con_vals[con]}")
+            print_mpi(f"{con} target: {con_target}, value: {con_vals[con]}")
             if not np.isclose(con_val, con_target, atol=feas_tol, rtol=feas_tol):
-                # print(f"violates equality constraint!")
+                # print_mpi(f"violates equality constraint!")
                 con_violation[con] = con_val - con_target
         else:
             con_ub = cons[con].get("upper", np.inf)
             con_lb = cons[con].get("lower", -np.inf)
-            print(
+            print_mpi(
                 f"{con} lower bound: {con_lb}, upper bound: {con_ub}, value: {con_vals[con]}")
 
             # find indices of constraint that violate the upper bound
@@ -259,11 +259,11 @@ def constraint_violation2(driver, cons, con_vals, feas_tol):
             con_violation[con] = con_viol
             # if con_val > con_ub:
             #     if not np.isclose(con_val, con_ub, atol=feas_tol, rtol=feas_tol):
-            #         # print(f"violates upper bound!")
+            #         # print_mpi(f"violates upper bound!")
             #         con_violation[con] = con_val - con_ub
             # elif con_val < con_lb:
             #     if not np.isclose(con_val, con_lb, atol=feas_tol, rtol=feas_tol):
-            #         # print(f"violates lower bound!")
+            #         # print_mpi(f"violates lower bound!")
             #         con_violation[con] = con_val - con_lb
     return con_violation
 
@@ -283,7 +283,7 @@ def estimate_lagrange_multipliers2(obj, active_cons, dvs, totals):
                  dv_size] = np.reshape(totals[obj, dv], dv_size)
         offset += dv_size
 
-    print(f"dv size: {n}")
+    print_mpi(f"dv size: {n}")
     n_con = 0
     for con, active in active_cons.items():
         n_con += np.count_nonzero(active)
@@ -300,20 +300,20 @@ def estimate_lagrange_multipliers2(obj, active_cons, dvs, totals):
                     [0.0]) for dv in dvs.keys()}
             else:
                 con_grad = {dv: totals[con, dv] for dv in dvs.keys()}
-            print(f"{con} grad: {con_grad}")
+            print_mpi(f"{con} grad: {con_grad}")
             offset = 0
             for dv in dvs.keys():
                 dv_size = dvs[dv]['global_size']
-                print(
+                print_mpi(
                     f"dest shape: {active_cons_jac[i, offset:offset + dv_size].shape}")
-                print(f"target shape: {con_grad[dv].shape}")
+                print_mpi(f"target shape: {con_grad[dv].shape}")
                 active_cons_jac[i, offset:offset + dv_size] = con_grad[dv]
                 offset += dv_size
             i += 1
 
     duals_vec, optimality, a, b = np.linalg.lstsq(
         active_cons_jac.T, obj_grad, rcond=None)
-    print(duals_vec)
+    print_mpi(duals_vec)
 
     i = 0
     for con, active in active_cons.items():
@@ -326,7 +326,7 @@ def estimate_lagrange_multipliers2(obj, active_cons, dvs, totals):
                 duals[con][con_i] = duals_vec[i]
                 i += 1
 
-    print(f"estimated multipliers: {duals}")
+    print_mpi(f"estimated multipliers: {duals}")
     return duals
 
 
@@ -347,7 +347,7 @@ def optimality2(responses, obj, active_cons, dvs, duals, totals):
         n_con += np.count_nonzero(active)
     active_cons_jac = np.zeros((n_con, n))
 
-    print(f"opt n_con: {n_con}")
+    print_mpi(f"opt n_con: {n_con}")
     dual_vec = np.zeros(n_con)
     dual_offset = 0
 
@@ -384,13 +384,13 @@ def optimality2(responses, obj, active_cons, dvs, duals, totals):
             else:
                 con_grad = {dv: totals[response_map[con], dv]
                             for dv in dvs.keys()}
-            print(f"{con} grad: {con_grad}")
+            print_mpi(f"{con} grad: {con_grad}")
             offset = 0
             for dv in dvs.keys():
                 dv_size = dvs[dv]['global_size']
-                print(
+                print_mpi(
                     f"dest shape: {active_cons_jac[i, offset:offset + dv_size].shape}")
-                print(f"target shape: {con_grad[dv].shape}")
+                print_mpi(f"target shape: {con_grad[dv].shape}")
                 active_cons_jac[i, offset:offset + dv_size] = con_grad[dv]
                 offset += dv_size
             i += 1
@@ -418,7 +418,7 @@ def get_active_constraints(prob, constraints, des_vars, feas_tol=1e-6):
     for constraint in constraints.keys():
         constraint_value = prob[constraint]
         if constraints[constraint]['equals'] is not None:
-            # print(f"constraint {constraint} is equality!")
+            # print_mpi(f"constraint {constraint} is equality!")
             active_cons.append(constraint)
         else:
             constraint_upper = constraints[constraint].get("upper", np.inf)
@@ -436,12 +436,12 @@ def get_active_constraints(prob, constraints, des_vars, feas_tol=1e-6):
             "upper", np.inf) / des_var_scaler - des_var_adder
         des_var_lower = des_vars[des_var].get(
             "lower", -np.inf) / des_var_scaler - des_var_adder
-        # print(f"{des_var} lower bound: {des_var_lower}, upper bound: {des_var_upper}, value: {des_var_value}")
+        # print_mpi(f"{des_var} lower bound: {des_var_lower}, upper bound: {des_var_upper}, value: {des_var_value}")
         if des_var_value > (des_var_upper / des_var_scaler - des_var_adder) or np.isclose(des_var_value, des_var_upper, atol=feas_tol, rtol=feas_tol):
-            # print(f"upper bound active!")
+            # print_mpi(f"upper bound active!")
             active_cons.append(des_var)
         elif des_var_value < des_var_lower or np.isclose(des_var_value, des_var_lower, atol=feas_tol, rtol=feas_tol):
-            # print(f"lower bound active!")
+            # print_mpi(f"lower bound active!")
             active_cons.append(des_var)
 
     return active_cons
@@ -463,17 +463,17 @@ def constraint_violation(prob, constraints, feas_tol=1e-6):
             constraint_value = prob[constraint]
             constraint_upper = constraints[constraint].get("upper", np.inf)
             constraint_lower = constraints[constraint].get("lower", -np.inf)
-            # print(f"{constraint} lower bound: {constraint_lower}, upper bound: {constraint_upper}, value: {constraint_value}")
+            # print_mpi(f"{constraint} lower bound: {constraint_lower}, upper bound: {constraint_upper}, value: {constraint_value}")
             if constraint_value > constraint_upper:
                 if not np.isclose(constraint_value, constraint_upper, atol=feas_tol, rtol=feas_tol):
-                    # print(f"violates upper bound!")
+                    # print_mpi(f"violates upper bound!")
                     constraint_error[constraint] = constraint_value - \
                         constraint_upper
                     scaled_constraint_error[constraint] = (
                         constraint_value - constraint_upper) / constraint_upper
             elif constraint_value < constraint_lower:
                 if not np.isclose(constraint_value, constraint_lower, atol=feas_tol, rtol=feas_tol):
-                    # print(f"violates lower bound!")
+                    # print_mpi(f"violates lower bound!")
                     constraint_error[constraint] = constraint_value - \
                         constraint_lower
                     scaled_constraint_error[constraint] = (
@@ -525,7 +525,7 @@ def optimality(totals, objective, active_constraints, des_vars, multipliers, max
         else:
             constraint_grad = {
                 input: totals[constraint, input] for input in des_vars.keys()}
-        # print(f"{constraint} grad: {constraint_grad}")
+        # print_mpi(f"{constraint} grad: {constraint_grad}")
         offset = 0
         for input in constraint_grad.keys():
             input_size = constraint_grad[input].size
@@ -608,7 +608,7 @@ def estimate_lagrange_multipliers(prob, objective, active_constraints, totals, d
         else:
             constraint_grad = {
                 input: totals[constraint, input] for input in des_vars.keys()}
-        # print(f"{constraint} grad: {constraint_grad}")
+        # print_mpi(f"{constraint} grad: {constraint_grad}")
         offset = 0
         for input in constraint_grad.keys():
             input_size = constraint_grad[input].size
@@ -616,16 +616,16 @@ def estimate_lagrange_multipliers(prob, objective, active_constraints, totals, d
                             input_size, i] = constraint_grad[input]
             offset += input_size
 
-    # print(f"grad_f_vec: {grad_f_vec}")
-    # print(f"active_cons_mat: {active_cons_mat}")
+    # print_mpi(f"grad_f_vec: {grad_f_vec}")
+    # print_mpi(f"active_cons_mat: {active_cons_mat}")
     multipliers_vec, optimality, a, b = np.linalg.lstsq(
         active_cons_mat, grad_f_vec, rcond=None)
     # multipliers_vec, optimality, a, b = np.linalg.lstsq(active_cons_mat, grad_f_vec, rcond=-1)
-    # print(f"lstsq output: {a}, {b}")
-    # print(f"multipliers vec: {multipliers_vec}")
-    # print(f"optimality: {np.linalg.norm(grad_f_vec - active_cons_mat @ multipliers_vec)}")
-    # print(f"Estimated optimality squared: {optimality}")
-    # print(f"Estimated optimality: {np.sqrt(optimality)}")
+    # print_mpi(f"lstsq output: {a}, {b}")
+    # print_mpi(f"multipliers vec: {multipliers_vec}")
+    # print_mpi(f"optimality: {np.linalg.norm(grad_f_vec - active_cons_mat @ multipliers_vec)}")
+    # print_mpi(f"Estimated optimality squared: {optimality}")
+    # print_mpi(f"Estimated optimality: {np.sqrt(optimality)}")
     offset = 0
     for constraint in active_constraints:
         constraint_size = 1
@@ -700,10 +700,11 @@ def grad_opt_feas(problem, have_cons, feas_tol, opt_tol=1e-16, duals_given = Non
 
     # lagrange multipliers of active constraints
     # only do this at the subproblem optima, don't do it while we're adding points to the surrogate
+    # however, do recompute if the constraint becomes active
     if duals_given is None:
         duals = estimate_lagrange_multipliers2(obj, active_cons, dvs, totals)
-    # elif active_cons:
-    #     duals = estimate_lagrange_multipliers2(obj, active_cons, dvs, totals)
+    elif set(duals_given.keys()) != set(active_cons.keys()):
+        duals = estimate_lagrange_multipliers2(obj, active_cons, dvs, totals)
     else:
         duals = duals_given
     # optimality
