@@ -52,6 +52,8 @@ class EulerBeamSolver():
         self.E = 0
         self.force = None
         self.Iyy = None
+        # self.conscaler = 1.
+        self.conscaler = 1e-5
 
         # stiffness matrix and load vector
         self.A = None
@@ -259,6 +261,7 @@ class EulerBeamSolver():
             esum += np.exp(rho*(g[i] - gm))
             # esum += np.exp(rho*(g[i]/gm - 1.))
         KS = gm + (1./rho)*np.log(esum)
+        KS *= self.conscaler
         # KS = 1. + (1./rho)*np.log(esum)
         # import pdb; pdb.set_trace()
         return KS
@@ -290,9 +293,11 @@ class EulerBeamSolver():
             desum[i] = rho*dg[i]*np.exp(rho*(g[i] - gm))
             # desum[i] = rho*dg[i]*np.exp(rho*(g[i]/gm - 1.))/gm
         KS = gm + (1./rho)*np.log(esum)
+        KS *= self.conscaler
         # KS = 1. + (1./rho)*np.log(esum)
         dKS = (1./rho)*(1./esum)*desum*dsigma_a
-        import pdb; pdb.set_trace()
+        dKS *= self.conscaler
+        # import pdb; pdb.set_trace()
         return dKS
 
     def evalFunctions(self, func_list):

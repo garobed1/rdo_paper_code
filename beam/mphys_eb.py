@@ -635,9 +635,10 @@ if __name__ == '__main__':
     problem_settings.nelem = nelem
     ndv_true = problem_settings.ndv_true
     problem_settings.structOptions["Nelem"] = nelem
-    problem_settings.structOptions["force"] = np.ones((nelem+1))*10000.0
-    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.006
-    problem_settings.structOptions['smax'] = 300.0
+    problem_settings.structOptions["force"] = np.ones((nelem+1))*1000000000.0
+    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.001
+    problem_settings.structOptions['smax'] = 5e5
+    problem_settings.structOptions['E'] = 69000000000
     # problem_settings.structOptions['smax'] = .20
     prob = om.Problem()
     prob.model = Top(problem_settings=problem_settings)
@@ -652,24 +653,24 @@ if __name__ == '__main__':
     prob.setup(mode='rev')
     # om.n2(prob, show_browser=False, outfile="mphys_as_adflow_eb_%s_2pt.html")
     #prob.set_val("mach", 2.)
-    prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.006)
+    # prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.001)
     prob.run_model()
-    print(prob.get_val("test.mass"))
-    # import pdb; pdb.set_trace()
+    # print(prob.get_val("test.mass"))
+    # # import pdb; pdb.set_trace()
 
-    prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.0005)
-    prob.run_model()
-    print(prob.get_val("test.mass"))
-    # import pdb; pdb.set_trace()
-    # f1 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
-    # prob.set_val("dv_struct", np.ones(nelem+1)*0.001)
+    # prob.set_val("dv_struct_TRUE", np.ones(ndv_true)*0.0015)
     # prob.run_model()
-    # f2 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
-    #prob.set_val("beta", 7.)
-    #x = np.linspace(2.5, 3.5, 10)
+    # print(prob.get_val("test.mass"))
+    # # import pdb; pdb.set_trace()
+    # # f1 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
+    # # prob.set_val("dv_struct", np.ones(nelem+1)*0.001)
+    # # prob.run_model()
+    # # f2 = copy.deepcopy(prob.get_val("test.struct_post.func_struct"))
+    # #prob.set_val("beta", 7.)
+    # #x = np.linspace(2.5, 3.5, 10)
 
-    print(prob.get_val("test.struct_states"))
-    print(np.mean(prob.get_val("test.struct_states")))
+    # print(prob.get_val("test.struct_states"))
+    # print(np.mean(prob.get_val("test.struct_states")))
     #prob.model.approx_totals()
 
 
