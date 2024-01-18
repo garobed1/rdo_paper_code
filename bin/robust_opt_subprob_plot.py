@@ -12,10 +12,12 @@ from collections import OrderedDict
 from utils.om_utils import grad_opt_feas
 import os, copy
 from functions.problem_picker import GetProblem
+from functions.smt_wrapper import SMTComponent
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from optimization.defaults import DefaultOptOptions
 from utils.sutils import convert_to_smt_grads
 import argparse
+from optimization.robust_objective import _gen_var_lists
 from mpi4py import MPI
 import pickle
 

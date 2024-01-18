@@ -636,7 +636,7 @@ if __name__ == '__main__':
     ndv_true = problem_settings.ndv_true
     problem_settings.structOptions["Nelem"] = nelem
     problem_settings.structOptions["force"] = np.ones((nelem+1))*1000000000.0
-    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.001
+    problem_settings.structOptions["th"] = np.ones(nelem+1)*0.0004
     problem_settings.structOptions['smax'] = 5e5
     problem_settings.structOptions['E'] = 69000000000
     # problem_settings.structOptions['smax'] = .20

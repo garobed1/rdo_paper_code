@@ -433,8 +433,10 @@ class UncertainEllipse(Problem):
         if kx is None:
             y[:,0] = np.sqrt((rx - fx)**2 + ry**2)
             y[:,0] += np.sqrt((rx + fx)**2 + ry**2)
-            y[:,0] -= r
+            y[:,0] -= 2*r
             kxt = -1
+            # if abs(np.mean(y[:,0])) < 1e-6:
+            # import pdb; pdb.set_trace()
         # eval
         else:
             kxt = self.var_list[kx]
@@ -481,7 +483,7 @@ class UncertainEllipse(Problem):
             y[:,0] = dh1 + dh2
         # radius
         if kxt == 2:
-            y[:,0] = -1.
+            y[:,0] = -2.
 
         return y
 

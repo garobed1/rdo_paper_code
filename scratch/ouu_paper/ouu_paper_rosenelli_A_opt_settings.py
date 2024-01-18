@@ -11,7 +11,7 @@ Only support this one robust quantity for the time being
 u_dim = 3
 d_dim = 2
 prob = 'uellipse_foc'
-p_con = False
+p_con = True
 p_eq = None
 p_ub = 0.
 p_lb = None
@@ -48,18 +48,18 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = 5.5
+x_init = [-1., 1.]
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
 approximate_truth_max = 5000*u_dim
 trust_increase_terminate = False
+tol_ignore_sdist = True
 # gtol 
 # stol
 # xi
 
 ##### UQ Parameters #####
-u_dim = 1
 eta_use = 1.0
 if not approximate_truth:
     N_t = approximate_truth_max
@@ -84,7 +84,7 @@ scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
 import numpy as np
-pdfs = [0., 0., ['norm', np.sqrt(2), 0.06], ['uniform'], ['uniform']] # replace 2nd arg with the current design var
+pdfs = [0., 0., ['norm', np.sqrt(2), 0.2], ['uniform'], ['uniform']] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####

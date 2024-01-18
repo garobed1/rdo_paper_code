@@ -697,7 +697,7 @@ class AdaptiveSampler(RobustSampler):
                 u_tx = self.sampling(N)
             u_tx = comm.bcast(u_tx)
         
-        
+        # import pdb; pdb.set_trace()
         tx = np.zeros([N, self.dim])
         tx[:, self.x_u_ind] = u_tx
         tx[:, self.x_d_ind] = self.x_d_cur#[self.x_d_cur[i] for i in self.x_d_ind]

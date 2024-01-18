@@ -9,12 +9,14 @@ from optimization.opt_subproblem import SequentialFullSolve
 from optimization.opt_trust_uncertain import UncertainTrust
 from surrogate.pougrad import POUHessian
 from collections import OrderedDict
+from utils.om_utils import grad_opt_feas
 import os, copy
 from functions.problem_picker import GetProblem
 from functions.smt_wrapper import SMTComponent
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
 from optimization.defaults import DefaultOptOptions
 import argparse
+from optimization.robust_objective import _gen_var_lists
 from mpi4py import MPI
 import pickle
 
@@ -103,6 +105,26 @@ t_dim = u_dim + d_dim
 # get robust function
 func = GetProblem(oset.prob, t_dim, use_design=True)
 xlimits = func.xlimits
+# modify function limits for UQ
+pdf_list, uncert_list, static_list, scales, pdf_name_list = _gen_var_lists(pdfs, func.xlimits)
+bc = 0
+for i in uncert_list:
+    if pdf_name_list[i] == 'norm':
+        xlimits[i,0] = pdf_list[i].mean() - 3*pdf_list[i].std()
+        xlimits[i,1] = pdf_list[i].mean() + 3*pdf_list[i].std()
+    if pdf_name_list[i] == 'uniform':
+        xlimits[i,0] = pdf_list[i].a
+        xlimits[i,1] = pdf_list[i].b
+    if pdf_name_list[i] == 'beta':
+        try:
+            xlimits[i,0] = oset.beta_bounds[bc][0]
+            xlimits[i,1] = oset.beta_bounds[bc][1]
+            bc += 1
+        except:
+            bc += 1 # if not present, just use default
+
+func.xlimits = xlimits
+
 try:
     p_con = oset.p_con
     p_eq = oset.p_eq
@@ -276,9 +298,9 @@ probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 if oset.prob == "toylinear":
     excomp = om.ExecComp('y = 10-x')
 elif oset.prob == "uellipse_loc": #assume rosenbrock
-    excomp = SMTComponent("rosenbrock", dim_base=2)
+    excomp = SMTComponent(prob="rosenbrock", dim_base=2)
 elif oset.prob == "uellipse_rad": #assume rosenbrock
-    excomp = SMTComponent("rosenbrock", dim_base=2)
+    excomp = SMTComponent(prob="rosenbrock", dim_base=2)
 elif oset.prob == "betatestex":
     excomp = om.ExecComp('y = x*0.2')
 else:

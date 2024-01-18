@@ -2,7 +2,7 @@
 
 # name = 'betaex_trust_sc_demo'
 # name = 'nonadaptive_ouu_demo_1'
-name = 'fourth_robust_attempt_adapt'
+name = 'fixcon6_robust_attempt_adapt'
 path = '.'
 
 
@@ -12,7 +12,7 @@ This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
 u_dim = 1
-d_dim = 1
+d_dim = 5
 prob = 'betatestex'
 p_con = False
 p_eq = None

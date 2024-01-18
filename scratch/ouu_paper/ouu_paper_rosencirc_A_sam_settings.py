@@ -6,7 +6,7 @@ stype = "pouhess"   #surrogate type
 
 ### FOR POU HESS
 rtype =  "hessgrad"
-opt = 'L-BFGS-B' #'SLSQP'#
+opt = 'SLSQP'#'L-BFGS-B' #'SLSQP'#
 local = True
 gopt = 'ga' #'brute'
 localswitch = True

@@ -13,7 +13,7 @@ class SMTComponent(om.ExplicitComponent):
         self.options.declare('prob_opts', default=[], desc="smt problem options")
         self.options.declare("sub_index", None, desc="indices of dimensions to connect")
 
-        self.func = None
+        # self.func = None
         
     
     def setup(self):
@@ -23,7 +23,7 @@ class SMTComponent(om.ExplicitComponent):
                                *self.options['prob_opts'])
 
         # get sub indices
-        self.dim_t = self.func.ndim
+        self.dim_t = self.func.options["ndim"]
         self.sub_ind = np.arange(0, self.dim_t).tolist()
         self.fix_ind = []
         self.fix_val = []
@@ -71,8 +71,10 @@ class SMTComponent(om.ExplicitComponent):
             x_full[i] = self.fix_val[c]
             c += 1
 
-
-        y = self.func(x_full)
+        # x_use = np.atleast_2d(x_full)
+        x_use = np.atleast_2d(x_sub)
+        # import pdb; pdb.set_trace()
+        y = self.func(x_use)
 
         outputs['y'] = y
 
@@ -94,10 +96,12 @@ class SMTComponent(om.ExplicitComponent):
             x_full[i] = self.fix_val[c]
             c += 1
 
+        # x_use = np.atleast_2d(x_full)
+        x_use = np.atleast_2d(x_sub)
+        dy = convert_to_smt_grads(self.func, x_use)
 
-        dy = convert_to_smt_grads(self.func, x_full)
-
-        partials['y','x'] = dy[self.sub_ind]
+        # partials['y','x'] = dy[self.sub_ind]
+        partials['y','x'] = dy
 
 
         

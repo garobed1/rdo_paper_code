@@ -302,7 +302,10 @@ class HessianRefine(ASCriteria):
                 if ball_rad:
                     # neighbors = neighbors_all[k]
                     neighbors = neighbors_all[c]
+                    # try:
                     xc = trx[neighbors,:]
+                    # except:
+                    #     import pdb; pdb.set_trace()
                 fac = fac_all[neighbors]
 
                 # work = X_cont[k,:] - trx[:self.ntr,:]

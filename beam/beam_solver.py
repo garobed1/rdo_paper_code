@@ -52,8 +52,9 @@ class EulerBeamSolver():
         self.E = 0
         self.force = None
         self.Iyy = None
-        # self.conscaler = 1.
-        self.conscaler = 1e-5
+        self.conscaler = 1.
+        self.rho = 1.
+        # self.conscaler = 1e-5
 
         # stiffness matrix and load vector
         self.A = None
@@ -249,9 +250,11 @@ class EulerBeamSolver():
         if sigma is None:
             sigma = self.evalStress()
         sigma_a = abs(sigma)
-        rho = 25
+        # rho = 25
+        rho = self.rho
         # s2 = sigma_a*sigma_a
-        s2 = sigma_a*sigma_a/(sm*sm)
+        # s2 = sigma_a*sigma_a/(sm*sm)
+        s2 = sigma_a/sm
         # sm2 = sm*sm
         sm2 = 1.
         g = s2 - sm2
@@ -275,11 +278,12 @@ class EulerBeamSolver():
             sigma = self.evalStress()
         sigma_a = abs(sigma)
         dsigma_a = np.sign(sigma)
-        rho = 25
-        # s2 = sigma_a*sigma_a
-        s2 = sigma_a*sigma_a/(sm*sm)
-        # ds2 = 2*sigma_a
-        ds2 = 2*sigma_a/(sm*sm)
+        # rho = 25
+        rho = self.rho
+        # s2 = sigma_a*sigma_a/(sm*sm)
+        s2 = sigma_a/sm
+        # ds2 = 2*sigma_a(sm*sm)
+        ds2 = (1./sm)*np.ones_like(s2)
         # sm2 = sm*sm
         sm2 = 1.
         g = s2 - sm2
@@ -297,6 +301,12 @@ class EulerBeamSolver():
         # KS = 1. + (1./rho)*np.log(esum)
         dKS = (1./rho)*(1./esum)*desum*dsigma_a
         dKS *= self.conscaler
+
+        # finite diff
+        # sigma_f = sigma.copy()
+        # sigma_f[0] += 1e-6 
+        # KS_f
+
         # import pdb; pdb.set_trace()
         return dKS
 

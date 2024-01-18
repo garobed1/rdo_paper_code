@@ -44,6 +44,7 @@ class UncertainTrust(OptSubproblem):
         self.preds = []
         self.loc = []
         self.reflevel = []
+        self.duals = None
 
     def _declare_options(self):
         
@@ -232,6 +233,8 @@ class UncertainTrust(OptSubproblem):
                 pickle.dump(self.prob_truth.model.stat.sampler.current_samples, f)
             with open(f'{path}/{title}/prob_model_points_{iter}.pickle', 'wb') as f:
                 pickle.dump(self.prob_model.model.stat.sampler.current_samples, f)
+            with open(f'{path}/{title}/duals_{iter}.pickle', 'wb') as f:
+                pickle.dump(self.duals, f)
 
             # surrogate evaluation points, for consistency
             with open(f'{path}/{title}/surr_eval.pickle', 'wb') as f:
@@ -301,6 +304,8 @@ class UncertainTrust(OptSubproblem):
             self.preds.append(pickle.load(f))
         with open(f'{path}/{title}/loc_{iter}.pickle', 'rb') as f:
             self.loc.append(pickle.load(f))
+        with open(f'{path}/{title}/duals_{iter}.pickle', 'rb') as f:
+            self.duals = pickle.load(f)
         with open(f'{path}/{title}/models_{iter}.pickle', 'rb') as f:
             self.models.append(pickle.load(f))
         with open(f'{path}/{title}/reflog_{iter}.pickle', 'rb') as f:
@@ -833,7 +838,7 @@ class UncertainTrust(OptSubproblem):
                 break
 
             # If the predicted step size is small enough
-            if self.sdist_sc < stol and gfeam < self.ctol:
+            if self.sdist_sc < stol and gfeam < self.ctol and not self.options["tol_ignore_sdist"]:
                 fail = 0
                 succ = 3
                 break
@@ -996,7 +1001,7 @@ class UncertainTrust(OptSubproblem):
                                     #     import pdb; pdb.set_trace()
                                     new_tol /= abs(self.duals['stat.musigma']) 
                                 else:
-                                    new_tol *= 1e8
+                                    new_tol *= 1e16
                                 
                             self.cur_tol = new_tol
                         return self.cur_tol
@@ -1004,6 +1009,8 @@ class UncertainTrust(OptSubproblem):
                     # refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump_max, xirhs, f'{self.path}/{self.title}/ref_progress.pickle')
                     gerrm = reflog[-1,1]/self.xi
+                    import pdb; pdb.set_trace()
+
                 else:
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump)
                     self.prob_model.run_model()

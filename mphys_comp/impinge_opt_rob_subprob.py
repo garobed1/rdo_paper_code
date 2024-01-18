@@ -33,9 +33,38 @@ import mphys_comp.impinge_setup as default_impinge_setup
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
+
+smax = 5e5 # max stress constraint
+E = 69000000000
+s = 25. # shock angle
+M0 = 1.8 # upstream mach number
 # rank += 1
 # use as scratch space for playing around
+# import settings from given config files
+# parse command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('-o', '--optfile', action='store', default='imp_opt_settings.py', help = 'python file containing settings for optimization parameters')
+parser.add_argument('-s', '--samplingfile', action='store', default='imp_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
 
+args = parser.parse_args()
+osetfile = args.optfile
+ssetfile = args.samplingfile
+
+
+root = os.getcwd()
+# optimization imports
+optsplit = osetfile.split(sep='/')
+optuse = '.'.join(optsplit)
+if optuse.endswith('.py'):
+    optuse = optuse.split('.')[:-1]
+    optuse = '.'.join(optuse)
+oset = importlib.import_module(optuse)
+title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
+title = title + f'_ndv{oset.d_dim}_smax{smax}_E{E}'
+if(oset.path == None):
+    path = "."
+else:
+    path = oset.path
 
 ### PARAMS ###
 # nsweep = 12
@@ -45,11 +74,9 @@ rank = comm.Get_rank()
 # smax_list = nsweep*[5e5] + nsweep*[1e6] + nsweep*[5e5] +  nsweep*[1e6] 
 # E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[54500000000] + nsweep*[54500000000]
 
-ndv = 7 # number of thickness variables
-s = 25. # shock angle
-M0 = 1.8 # upstream mach number
-smax = 5e5 # max stress constraint
-E = 69000000000
+ndv = oset.d_dim # number of thickness variables
+
+
 # eta_use = 1.0
 
 home = '/gpfs/u/home/ODLC/ODLCbdnn/'
@@ -76,13 +103,13 @@ xlimits[ndv+1,1] = 2.9
 tol_ignore_sdist = True
 
 # parse command line arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('-o', '--optfile', action='store', default='imp_opt_settings.py', help = 'python file containing settings for optimization parameters')
-parser.add_argument('-s', '--samplingfile', action='store', default='imp_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
+# parser = argparse.ArgumentParser()
+# parser.add_argument('-o', '--optfile', action='store', default='imp_opt_settings.py', help = 'python file containing settings for optimization parameters')
+# parser.add_argument('-s', '--samplingfile', action='store', default='imp_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
 
-args = parser.parse_args()
-osetfile = args.optfile
-ssetfile = args.samplingfile
+# args = parser.parse_args()
+# osetfile = args.optfile
+# ssetfile = args.samplingfile
 
 
 
@@ -99,20 +126,20 @@ ssetfile = args.samplingfile
 #### SCRIPT BEGINS HERE ####
 ############################
 # import settings from given config files
-root = os.getcwd()
-# optimization imports
-optsplit = osetfile.split(sep='/')
-optuse = '.'.join(optsplit)
-if optuse.endswith('.py'):
-    optuse = optuse.split('.')[:-1]
-    optuse = '.'.join(optuse)
-oset = importlib.import_module(optuse)
-title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
-title = title + f'_ndv{ndv}_smax{smax}_E{E}'
-if(oset.path == None):
-    path = "."
-else:
-    path = oset.path
+# root = os.getcwd()
+# # optimization imports
+# optsplit = osetfile.split(sep='/')
+# optuse = '.'.join(optsplit)
+# if optuse.endswith('.py'):
+#     optuse = optuse.split('.')[:-1]
+#     optuse = '.'.join(optuse)
+# oset = importlib.import_module(optuse)
+# title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
+# title = title + f'_ndv{ndv}_smax{smax}_E{E}'
+# if(oset.path == None):
+#     path = "."
+# else:
+#     path = oset.path
 
 # adaptive sampling imports, ignore path from here since it should be in oset
 samsplit = ssetfile.split(sep='/')
@@ -383,7 +410,8 @@ sub_optimizer.prob_truth.set_val("x_d", x_init)
 sub_optimizer.prob_model.set_val("x_d", x_init)
 # om.n2(probm)
 # sub_optimizer.prob_truth.run_model()
-sub_optimizer.prob_model.run_model()
+# sub_optimizer.prob_model.run_model()
+sub_optimizer.prob_model.final_setup()
 
 # get_last_case = False
 # i = 0

@@ -28,6 +28,9 @@ class beamDVComp(om.ExplicitComponent):
                                     distributed=False,
                                     desc='beam thickness on the solver mesh',
                                     tags=['beam_dvs'])
+        
+        if self.ndv < 4:
+            self.method = 'slinear'
 
     def setup_partials(self):
         outsize = self._get_var_meta('th', 'size')
@@ -56,37 +59,41 @@ class beamDVComp(om.ExplicitComponent):
 
 
 
-# import matplotlib.pyplot as plt
-
-# ycp = np.array([5.0, 12.0, 14.0, 16.0, 21.0, 29.0, 15.0, 10.0, 2.0, 6.0 ])
-# ndv = 10
-# n = 50
-# x = np.linspace(1.0, 12.0, n)
-
-# prob = om.Problem()
- 
-# comp = beamDVComp(ndv=ndv, method='akima')
-
-# prob.model.add_subsystem('vars', om.IndepVarComp('dv', val=ycp))
-# prob.model.add_subsystem('beamdv', comp)
-# prob.model.add_subsystem('sink', om.ExecComp('y=x',
-#                                             x={'copy_shape':'y'},
-#                                             y={'shape':n}))
-
-# prob.model.connect('vars.dv','beamdv.DVS')
-# prob.model.connect('beamdv.th','sink.x')
-
-# prob.setup(force_alloc_complex=True)
-# prob.run_model()
-
-# x = np.linspace(0,1,n)
-# xcp = np.linspace(0,1,ndv)
-# y = prob.get_val('sink.y')
-
-# plt.plot(x, y)
-# plt.plot(xcp, ycp, 'o')
-# plt.savefig('dvinterp.png')
-
-# prob.check_partials()
-
-# print(prob.get_val('sink.y'))
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    
+    # ycp = np.array([5.0, 12.0, 14.0, 16.0, 21.0, 29.0, 15.0, 10.0, 2.0, 6.0 ])
+    # ndv = 10
+    ycp = np.array([5.0,  6.0 ])
+    ndv = 2
+    n = 50
+    x = np.linspace(1.0, 12.0, n)
+    
+    prob = om.Problem()
+    
+    comp = beamDVComp(ndv=ndv)#, method='akima')
+    # comp = beamDVComp(ndv=ndv, method='slinear')#, method='akima')
+    
+    prob.model.add_subsystem('vars', om.IndepVarComp('dv', val=ycp))
+    prob.model.add_subsystem('beamdv', comp)
+    prob.model.add_subsystem('sink', om.ExecComp('y=x',
+                                                x={'copy_shape':'y'},
+                                                y={'shape':n}))
+    
+    prob.model.connect('vars.dv','beamdv.DVS')
+    prob.model.connect('beamdv.th','sink.x')
+    
+    prob.setup(force_alloc_complex=True)
+    prob.run_model()
+    
+    x = np.linspace(0,1,n)
+    xcp = np.linspace(0,1,ndv)
+    y = prob.get_val('sink.y')
+    
+    plt.plot(x, y)
+    plt.plot(xcp, ycp, 'o')
+    plt.savefig('dvinterp.png')
+    
+    prob.check_partials()
+    
+    print(prob.get_val('sink.y'))
