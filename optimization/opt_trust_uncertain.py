@@ -166,6 +166,13 @@ class UncertainTrust(OptSubproblem):
             types=bool,
             desc="if true, instead of min(gerr, sdist), just do gerr"
         )
+
+        declare(
+            "min_dual", 
+            default=1e-2, 
+            types=float,
+            desc="for robust constraints, if dual for it is zero or smaller than this, scale the validation tolerance to ensure some refinement"
+        )
         
         declare(
             "ref_strategy", 
@@ -992,6 +999,8 @@ class UncertainTrust(OptSubproblem):
                             if 'stat.musigma' in self.prob_model.driver._cons:
                                 # import pdb; pdb.set_trace()
 
+                                # determine factor based on lagrange multiplier value
+                                fac = 1.
                                 #NOTE: if we start with active constraints, but they turn off, 
                                 # because we keep duals constant, this doesn't go away
                                 # i think we want to keep this behavior, otherwise refinement quits
@@ -999,17 +1008,18 @@ class UncertainTrust(OptSubproblem):
                                 if 'stat.musigma' in self.duals:
                                     # if new_tol > 1e-15:
                                     #     import pdb; pdb.set_trace()
-                                    new_tol /= abs(self.duals['stat.musigma']) 
+                                    fac_div = max(self.options['min_dual'], self.duals['stat.musigma'])
                                 else:
-                                    new_tol *= 1e16
+                                    fac_div = self.options['min_dual']
                                 
                             self.cur_tol = new_tol
-                        return self.cur_tol
+                        return self.cur_tol*(fac/fac_div)
 
                     # refjump = self.prob_model.model.stat.refine_model(refjump_max, self.xi*rhs)
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump_max, xirhs, f'{self.path}/{self.title}/ref_progress.pickle')
-                    gerrm = reflog[-1,1]/self.xi
-                    import pdb; pdb.set_trace()
+                    # gerrm = reflog[-1,1]/self.xi
+                    gerrm = self.cur_tol
+                    # import pdb; pdb.set_trace()
 
                 else:
                     refjump, reflog = self.prob_model.model.stat.refine_model(refjump)

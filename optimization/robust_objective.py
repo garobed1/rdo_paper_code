@@ -727,7 +727,7 @@ class AdaptiveSampler(RobustSampler):
         N_added = 0
         if e_tol is not None:
             N_use = min(N, self.options["max_adapt"])
-        N_remain = N - N_use
+        # N_remain = N - N_use
         batch_use = max_batch
         if N_use < max_batch:
             batch_use = N_use
@@ -740,7 +740,8 @@ class AdaptiveSampler(RobustSampler):
             if os.path.isfile(resume):
                 with open(resume, 'rb') as f:
                     progress = pickle.load(f)
-                N_added = progress['x'].shape[0] - N_before
+                N_added = progress['x'].shape[0]
+                # import pdb; pdb.set_trace()
                 N_use = N_use - N_added
 
                 # add back training points
@@ -830,7 +831,7 @@ class AdaptiveSampler(RobustSampler):
                 rF.initialize(mf, g0)
                 en = rF.get_energy(bounds)
 
-                if c % 5 == 0:
+                if c % 5 == 0 and c < 11:
                     e_tol_p = e_tol(mf)
                     e_tol_h = copy.deepcopy(e_tol_p)
                 else:

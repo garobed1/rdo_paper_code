@@ -14,9 +14,9 @@ Only support this one robust quantity for the time being
 u_dim = 1
 d_dim = 5
 prob = 'betatestex'
-p_con = False
+p_con = True
 p_eq = None
-p_ub = 3.
+p_ub = 0.
 p_lb = None
 
 # refinement threshold strategies

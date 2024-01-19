@@ -84,7 +84,7 @@ scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
 import numpy as np
-pdfs = [0., 0., ['norm', np.sqrt(2), 0.2]] #sigma = 0.2 # replace 2nd arg with the current design var
+pdfs = [0., 0., ['norm', np.sqrt(1), 0.2]] #sigma = 0.2 # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 # in case we use a beta dist, modify function limits with this

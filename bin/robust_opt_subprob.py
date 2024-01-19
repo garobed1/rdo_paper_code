@@ -204,8 +204,9 @@ if use_surrogate:
     if hasattr(sset, 'rho'):
         rscale = sset.rho
     # NOTE: NON-ZERO CAUSES NANS
+    # not anymore
     # min_contributions = 1e-12
-    min_contributions = 0.0
+    min_contributions = 1e-14
 
     if(full_surrogate):
         sdim = t_dim
@@ -297,7 +298,7 @@ probt.model.add_design_var("x_d", lower=xlimits_d[:,0], upper=xlimits_d[:,1])
 ### TEMPORARY EXECCOMP FOR CONSTRAINED PROBLEM ###
 if oset.prob == "toylinear":
     excomp = om.ExecComp('y = 10-x')
-elif oset.prob == "uellipse_loc": #assume rosenbrock
+elif oset.prob == "uellipse_foc": #assume rosenbrock
     excomp = SMTComponent(prob="rosenbrock", dim_base=2)
 elif oset.prob == "uellipse_rad": #assume rosenbrock
     excomp = SMTComponent(prob="rosenbrock", dim_base=2)
