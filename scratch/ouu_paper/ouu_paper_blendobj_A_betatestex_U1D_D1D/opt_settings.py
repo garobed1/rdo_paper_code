@@ -11,7 +11,7 @@ Only support this one robust quantity for the time being
 u_dim = 1
 d_dim = 1
 prob = 'betatestex'
-p_con = True
+p_con = False
 p_eq = None
 p_ub = 3.
 p_lb = None
@@ -48,7 +48,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = 5.5
+x_init = 5.0
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -66,7 +66,7 @@ if not approximate_truth:
 else:
     N_t = 100*u_dim
 # N_t = 500*u_dim
-N_m = 6
+N_m = 10
 jump = 10
 # model sampling
 sample_type = 'Adaptive'
@@ -87,7 +87,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 10
+max_outer = 20
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

@@ -169,7 +169,7 @@ class UncertainTrust(OptSubproblem):
 
         declare(
             "min_dual", 
-            default=1e-2, 
+            default=1e-4, 
             types=float,
             desc="for robust constraints, if dual for it is zero or smaller than this, scale the validation tolerance to ensure some refinement"
         )
@@ -996,11 +996,13 @@ class UncertainTrust(OptSubproblem):
                             # if the constraint isnt active, multiply by a large number
 
                             # if the robust quantity is a constraint
+                            fac = 1.
+                            fac_div = 1.
                             if 'stat.musigma' in self.prob_model.driver._cons:
                                 # import pdb; pdb.set_trace()
 
                                 # determine factor based on lagrange multiplier value
-                                fac = 1.
+                                # fac = 1.
                                 #NOTE: if we start with active constraints, but they turn off, 
                                 # because we keep duals constant, this doesn't go away
                                 # i think we want to keep this behavior, otherwise refinement quits

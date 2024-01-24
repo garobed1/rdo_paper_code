@@ -6,7 +6,7 @@ stype = "pouhess"   #surrogate type
 
 ### FOR POU HESS
 rtype =  "hessgrad"
-opt = 'L-BFGS-B' #'SLSQP'#
+opt = 'SLSQP'#'L-BFGS-B' #'SLSQP'#
 local = True
 gopt = 'ga' #'brute'
 localswitch = True
@@ -49,7 +49,7 @@ ntr = 40      #number of points to add
 ntot = nt0 + ntr    #total number of points
 
 
-batch = 5#dim*2        #batch size for refinement, as a percentage of ntr
+batch = 1#dim*2        #batch size for refinement, as a percentage of ntr
 # batch = 5#dim*2        #batch size for refinement, as a percentage of ntr
 min_contribution=1e-14 # for pou hess
 

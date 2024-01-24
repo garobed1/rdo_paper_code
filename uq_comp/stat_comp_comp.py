@@ -277,7 +277,7 @@ class StatCompComponent(om.ExplicitComponent):
                 self.func_calls.append(self.func_calls[-1] + self.sampler.current_samples['x'].shape[0])
         else:
             self.func_calls.append(self.sampler.current_samples['x'].shape[0])
-
+        
 
         outputs['musigma'] = obj
 
@@ -294,6 +294,8 @@ class StatCompComponent(om.ExplicitComponent):
             eval_sampler = self.surr_eval
             eval_sampler[:,self.sampler.x_d_ind] = x
             eval_N = 5000*self.sampler.x_u_dim
+        
+        
 
         for j in range(self.sampler.x_d_dim):
             self.pdfs[self.sampler.x_d_ind[j]] = x[j]
@@ -349,6 +351,7 @@ class StatCompComponent(om.ExplicitComponent):
         grad_ = eta*gm + (1-eta)*gs
         print_mpi(f"o       {self.sampler.options['name']} Iteration {self.sampler.iter_max}: RGrad = {grad_} ")
         self.grads.append(grad_)
+        comm.Barrier()
         partials['musigma','x_d'] = grad_
 
     def get_fidelity(self):

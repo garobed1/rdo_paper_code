@@ -48,7 +48,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = 5.5
+x_init = 5.0
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False

@@ -53,7 +53,7 @@ class EulerBeamSolver():
         self.force = None
         self.Iyy = None
         self.conscaler = 1.
-        self.rho = 1.
+        self.rho = 10.
         # self.conscaler = 1e-5
 
         # stiffness matrix and load vector

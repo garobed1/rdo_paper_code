@@ -95,7 +95,8 @@ class HessianRefine(ASCriteria):
 
         declare(
             "min_points",
-            size-1,
+            # size-1,
+            9,
             # 4,
             types=int,
             desc="Minimum number of points to compute distances to if min_contribution is active"

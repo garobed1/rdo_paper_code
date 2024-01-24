@@ -6,16 +6,20 @@ stype = "pouhess"   #surrogate type
 
 ### FOR POU HESS
 rtype =  "hessgrad"
-opt = 'L-BFGS-B' #'SLSQP'#
+opt = 'SLSQP'#'L-BFGS-B' #'SLSQP'#
 local = True
 gopt = 'ga' #'brute'
 localswitch = True
 # POU Params
 rscale = 5.5
-rho = 5000. # NOTE: Only applies to criteria
+# rho = 5000. # NOTE: Only applies to criteria
+rho = 50. # NOTE: Only applies to criteria
+# rho2 = 5000. # NOTE: USE FOR ENERGY ONLY?
+# NOTE: We'll use a separate rho = 5000 for energy
+min_contribution = 1e-14
 rsca = True  # hess function value scale
 vsca = False # hess cell volume scale
-min_contribution=1e-14
+
 ### FOR POU SFCVT
 # rtype =  "pousfcvt"
 # opt = 'SLSQP' #for SFCVT constraint
@@ -43,7 +47,12 @@ tb = [1e-6, 2e+1]
 nt0  = 10       #initial design size
 ntr = 40      #number of points to add
 ntot = nt0 + ntr    #total number of points
+
+
 batch = 1#dim*2        #batch size for refinement, as a percentage of ntr
+# batch = 5#dim*2        #batch size for refinement, as a percentage of ntr
+min_contribution=1e-14 # for pou hess
+
 mstarttype = 2            # 0: No multistart
                           # 1: Start at the best out of a number of samples
                           # 2: Perform multiple optimizations
