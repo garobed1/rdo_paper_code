@@ -88,7 +88,7 @@ pdfs = [0., 0., ['norm', np.sqrt(1), 0.2], ['uniform'], ['uniform']] # replace 2
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 50
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

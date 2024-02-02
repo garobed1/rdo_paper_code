@@ -763,7 +763,8 @@ class AdaptiveSampler(RobustSampler):
                                  bounds, self.options["probability_functions"], self.x_u_ind)
         if not self.options['full_refine']:
             # bounds = self.xlimits[self.x_u_ind]
-            self.rcrit.set_static(self.x_d_cur[0,:])
+            # import pdb; pdb.set_trace()
+            self.rcrit.set_static(np.atleast_2d(self.x_d_cur[0,:]))
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
 

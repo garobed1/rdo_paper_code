@@ -42,7 +42,7 @@ design_noise_act = 0.0
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 0.1 #"""We're making this relative to the design bound scale"""
-xi = 0.1
+xi = 0.01
 # eta1
 # eta2
 # gamma1

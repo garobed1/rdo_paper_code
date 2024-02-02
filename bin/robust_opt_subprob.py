@@ -286,6 +286,8 @@ probt.model.add_subsystem("stat",
 try:
     import pyoptsparse
     probt.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+    probt.driver.opt_settings["honor_original_bounds"] = "yes"
+    probt.driver.opt_settings["bound_relax_factor"] = 0.0
 except:
     probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
     probt.driver.opt_settings = opt_settings

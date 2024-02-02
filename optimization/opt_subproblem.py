@@ -270,6 +270,7 @@ class OptSubproblem():
 
         # in this case, run the driver as is
         if radius < 0.:
+            self.prob_model.comm.Barrier()
             self.prob_model.run_driver()
 
         # in this case, add a bound radius constraint 

@@ -93,7 +93,7 @@ class ImpingingShock(Problem):
         actual_settings.aeroOptions['nCycles'] = 5000000
         actual_settings.aeroOptions['L2Convergence'] = 1e-12
         actual_settings.aeroOptions['printIterations'] = False
-        actual_settings.aeroOptions['printTiming'] = True
+        actual_settings.aeroOptions['printTiming'] = False
 
         # mesh-based settings
         mx = int(self.options["mesh"].split('_')[-2])

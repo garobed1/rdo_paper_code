@@ -26,38 +26,37 @@ rank = comm.Get_rank()
 # smax_list = nsweep*[5e5] + nsweep*[1e6] + nsweep*[5e5] +  nsweep*[1e6] 
 # E_list = nsweep*[69000000000] +nsweep*[69000000000] + nsweep*[54500000000] + nsweep*[54500000000]
 
-ndv = 4 # number of thickness variables
+ndv = 5 # number of thickness variables
 s = 25. # shock angle
 M0 = 1.8 # upstream mach number
 smax = 5e5 # max stress constraint
 E = 69000000000
-ndv = 7
 eta_use = 1.0
 
-name = 'first_robust_attempt'
-# home = '/gpfs/u/home/ODLC/ODLCbdnn/'
-# barn = 'barn'
+name = 'rescale6_sc'
+home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+barn = 'barn'
 # name = 'test_case_reload'
-home = '/home/garobed/'
-barn = ''
+# home = '/home/garobed/'
+# barn = ''
 
 
-mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
+# mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 # mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
-# mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 
-N_t = 2
+N_t = 6
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
 x_init = np.ones(ndv)*0.006
 pdfs = ndv*[0.]
 pdfs = pdfs + [['uniform'], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])
-xlimits[:ndv,0] = 0.0004
+xlimits[:ndv,0] = 0.0009
 xlimits[:ndv,1] = 0.007
 xlimits[ndv,0] = 23.
 xlimits[ndv,1] = 27.
-xlimits[ndv+1,0] = 1.5
-xlimits[ndv+1,1] = 1.9
+xlimits[ndv+1,0] = 2.5
+xlimits[ndv+1,1] = 2.9
 
 sampler_t = CollocationSampler(np.array([x_init]), N=N_t, 
             name='truth', 

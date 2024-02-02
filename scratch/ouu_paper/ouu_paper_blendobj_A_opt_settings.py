@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_blendobj_A'
+name = 'test_freezes'
 path = '.'
 
 
@@ -87,7 +87,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 50
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

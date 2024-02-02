@@ -2,7 +2,7 @@
 
 # name = 'betaex_trust_sc_demo'
 # name = 'nonadaptive_ouu_demo_1'
-name = 'fixcon6_robust_attempt_adapt'
+name = 'rescale6_robust_attempt_adapt'
 path = '.'
 
 
@@ -12,7 +12,7 @@ This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
 u_dim = 1
-d_dim = 5
+d_dim = 3
 prob = 'betatestex'
 p_con = True
 p_eq = None
@@ -90,7 +90,7 @@ pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 40
+max_outer = 80
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

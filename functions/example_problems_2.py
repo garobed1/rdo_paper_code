@@ -517,8 +517,9 @@ class UncertainEllipse(Problem):
 
     #     th = np.linspace(0, 2*np.pi, N)
 
-        
-        
+
+
+
 
 
 

@@ -100,7 +100,7 @@ for i in range(u_dim):
 pdfs = pdfs2 + pdfs
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 50
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

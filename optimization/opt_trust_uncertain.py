@@ -12,6 +12,7 @@ from collections import OrderedDict
 import pickle
 import os, sys
 from smt.utils.options_dictionary import OptionsDictionary
+import time
 
 import openmdao.api as om
 from openmdao.utils.mpi import MPI
@@ -169,7 +170,7 @@ class UncertainTrust(OptSubproblem):
 
         declare(
             "min_dual", 
-            default=1e-4, 
+            default=1e-2, 
             types=float,
             desc="for robust constraints, if dual for it is zero or smaller than this, scale the validation tolerance to ensure some refinement"
         )
@@ -576,7 +577,13 @@ class UncertainTrust(OptSubproblem):
             # self.prob_model.model.stat.check_partials_flag = False
             # 
             fmod_cent = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
+
+            t0 = time.time()
             self._solve_subproblem(zk)  
+            t1 = time.time()
+            print_mpi(f"OPT TIME: {t1 - t0}")
+
+
             fmod_cand = copy.deepcopy(self.prob_model.get_val(self.prob_outs[0]))
             zk_cand = self.prob_model.driver.get_design_var_values()
             # self.prob_model.model.stat.check_partials_flag = True

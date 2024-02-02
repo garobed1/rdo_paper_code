@@ -94,7 +94,7 @@ x_init = np.ones(ndv)*0.005
 pdfs = ndv*[0.]
 pdfs = pdfs + [['uniform'], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])
-xlimits[:ndv,0] = 0.0004
+xlimits[:ndv,0] = 0.0009
 xlimits[:ndv,1] = 0.007
 xlimits[ndv,0] = 23.
 xlimits[ndv,1] = 27.
@@ -322,6 +322,7 @@ probt.model.add_subsystem("stat",
 try:
     import pyoptsparse
     probt.driver = om.pyOptSparseDriver(optimizer='IPOPT') 
+    probt.driver.opt_settings["honor_original_bounds"] = "yes"
 except:
     probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 # probt.driver.opt_settings = {'ACC': 1e-6}

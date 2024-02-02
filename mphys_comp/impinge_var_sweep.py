@@ -63,17 +63,17 @@ problem_settings.aeroOptions['printTiming'] = False
 # problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 # nelem = 30
 
-problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_mphys_145_145_25.cgns'
-nelem = 60
-L = 0.254
+# problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_mphys_145_145_25.cgns'
+# nelem = 60
+# L = 0.254
 
 # problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
 # nelem = 78
 # L = 0.75
 
-# problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
-# nelem = 117
-# L = 0.75
+problem_settings.aeroOptions['gridFile'] = f'{home}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+nelem = 117
+L = 0.75
 
 problem_settings.nelem = nelem
 problem_settings.structOptions['Nelem'] = nelem
