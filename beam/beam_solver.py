@@ -331,7 +331,7 @@ class EulerBeamSolver():
                 dict["stress"] = sigma
             if(key == "stresscon"):
                 dict["stresscon"] = KS
-
+        # import pdb; pdb.set_trace()
         return dict
 
     def evalMass(self):

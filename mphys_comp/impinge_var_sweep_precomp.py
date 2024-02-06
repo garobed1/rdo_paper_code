@@ -31,7 +31,7 @@ problem_settings.ndv_true = ndv
 # inputs_f = {"M0": 1.5,
 #             "shock_angle": 25.}
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
-th = np.array([0.0009, 0.0010, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.005, 0.006, 0.007])
+th = np.array([0.0009, 0.00095, 0.0010, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.005, 0.006, 0.007])
 N_fullfac = 8**2 # 64 evals per direction
 
 N_total = len(th)*N_fullfac
@@ -78,7 +78,7 @@ mesh = f'{home}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 sampling_u = FullFactorial(xlimits=xlimits_u)
 
 
-func = ImpingingShock(input_bounds=xlimits, ndv=ndv, E=E, smax=smax, inputs=inputs, mesh=mesh)
+func = ImpingingShock(input_bounds=xlimits, ndv=ndv, E=E, smax=smax, inputs=inputs, mesh=mesh, comm=MPI.COMM_SELF)
 
 
 # x = sampling(Ncase)
@@ -101,7 +101,7 @@ if not os.path.exists(f'./{title}/x.npy'):
         with open(f'./{title}/x.npy', 'wb') as f:
             pickle.dump(x, f)
 
-comm.barrier()
+comm.Barrier()
 with open(f'./{title}/x.npy', 'rb') as f:
     x = pickle.load(f)
 # x = comm.bcast(xfull, root=0)
@@ -109,7 +109,6 @@ cases = divide_cases(N_total, size)
 
 
 for i in cases[rank]:
-
     print(x[i,:])
     f = func(np.atleast_2d(x[i,:]))
     totals = func.prob.compute_totals(of=['test.mass', "test.stresscon"], wrt=['dv_struct_TRUE','test.dv_struct', 'shock_angle','M0'])
@@ -156,5 +155,4 @@ for i in cases[rank]:
     with open(f'./{title}/s_{i}.npy', 'wb') as f:
         pickle.dump(sig, f)
 
-    breakpoint()
-    
+    # breakpoint()

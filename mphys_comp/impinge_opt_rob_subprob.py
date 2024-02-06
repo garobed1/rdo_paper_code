@@ -45,10 +45,12 @@ M0 = 1.8 # upstream mach number
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--optfile', action='store', default='imp_opt_settings.py', help = 'python file containing settings for optimization parameters')
 parser.add_argument('-s', '--samplingfile', action='store', default='imp_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
+parser.add_argument('-d', '--datadir', action='store', default=None, help = 'initial data to be used in addition to points at start')
 
 args = parser.parse_args()
 osetfile = args.optfile
 ssetfile = args.samplingfile
+datadir = args.datadir
 
 
 root = os.getcwd()
@@ -90,7 +92,7 @@ mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 
 # N_t = 2
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
-x_init = np.ones(ndv)*0.005
+x_init = np.ones(ndv)*0.0035
 pdfs = ndv*[0.]
 pdfs = pdfs + [['uniform'], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])
@@ -289,7 +291,69 @@ else:
                           retain_uncertain_points=retain_uncertain_points,
                           external_only=external_only)
 
+# if we're starting with data
+# NOTE: only works for 5dvs for now, but we can fix that
+if datadir is not None:
 
+    i = 0
+    x_list = []
+    y_list = []
+    g_uq_list0 = []
+    g_uq_list1 = []
+    g_dv_list0 = []
+    g_dv_list1 = []
+    g_th_list0 = []
+    g_th_list1 = []
+    while 1:
+        try:
+            with open(f'/{root}/{datadir}/x_{i}.npy', 'rb') as f:
+                x_cur = pickle.load(f)
+            with open(f'/{root}/{datadir}/y_{i}.npy', 'rb') as f:
+                y_cur = pickle.load(f)
+            with open(f'/{root}/{datadir}/g_uq_{i}.npy', 'rb') as f:
+                g_uq_cur = pickle.load(f)
+            with open(f'/{root}/{datadir}/g_dv_{i}.npy', 'rb') as f:
+                g_dv_cur = pickle.load(f)
+            with open(f'/{root}/{datadir}/g_th_{i}.npy', 'rb') as f:
+                g_th_cur = pickle.load(f)
+            x_list.append(x_cur)
+            y_list.append(y_cur)
+            g_uq_list0.append(g_uq_cur[0,:])
+            g_uq_list1.append(g_uq_cur[1,:])
+            g_dv_list0.append(g_dv_cur[0,:])
+            g_dv_list1.append(g_dv_cur[1,:])
+            g_th_list0.append(g_th_cur[0,:])
+            g_th_list1.append(g_th_cur[1,:])
+            i += 1
+        except:
+            break
+
+    x_extra = np.array(x_list)
+    y_extra = np.array(y_list)
+
+    ndvd = x_extra.shape[1] - 2
+
+    g_uq0 = np.array(g_uq_list0)
+    g_uq1 = np.array(g_uq_list1)
+    g_dv0 = np.array(g_dv_list0)
+    g_dv1 = np.array(g_dv_list1)
+    g_th0 = np.array(g_th_list0)
+    g_th1 = np.array(g_th_list1)
+
+    # attach uq to dv
+    g_full0 = np.append(g_dv0, g_uq0, axis = 1)
+    g_full1 = np.append(g_dv1, g_uq1, axis = 1) # not really needed for this
+
+    pmcur = sampler_m.current_samples
+    # pmcur['x'] = np.append(pmcur['x'], x_extra, axis = 0)
+    # pmcur['f'] = np.append(pmcur['f'], np.array([y_extra[:,0]]), axis = 0)
+    # pmcur['g'] = np.append(pmcur['g'], g_full0, axis = 0)
+    pmcur['x'] = x_extra
+    pmcur['f'] = np.array([y_extra[:,0]]).T
+    pmcur['g'] = g_full0
+    sampler_m.initialize(reset=True)
+    sampler_m.set_design(np.array([x_init]))
+    sampler_m.add_data(pmcur, replace_current=True)
 # prob = om.Problem(comm=MPI.COMM_SELF)
 # try:
 #     import pyoptsparse

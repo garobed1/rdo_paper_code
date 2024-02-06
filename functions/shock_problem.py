@@ -4,12 +4,12 @@ Implements the impinging shock openmdao problem as an smt Problem
 from cmath import cos, sin
 import numpy as np
 from mpi4py import MPI
-import sys
+import sys, time
 
 import openmdao.api as om
 from smt.problems.problem import Problem
 from mphys_comp.impinge_analysis import Top
-from utils.sutils import divide_cases
+from utils.sutils import divide_cases, print_mpi
 from utils.om_utils import map_om_to_smt, get_om_dict, get_om_design_size, om_dict_to_flat_array
 
 import mphys_comp.impinge_setup as default_impinge_setup
@@ -90,7 +90,8 @@ class ImpingingShock(Problem):
         # further setting
         actual_settings.aeroOptions['NKSwitchTol'] = 1e-6 #1e-6
         # problem_settings.aeroOptions['NKSwitchTol'] = 1e-3 #1e-6
-        actual_settings.aeroOptions['nCycles'] = 5000000
+        # actual_settings.aeroOptions['nCycles'] = 5000000
+        actual_settings.aeroOptions['nCycles'] = 500000
         actual_settings.aeroOptions['L2Convergence'] = 1e-12
         actual_settings.aeroOptions['printIterations'] = False
         actual_settings.aeroOptions['printTiming'] = False

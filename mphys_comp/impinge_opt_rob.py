@@ -47,7 +47,7 @@ mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 
 N_t = 6
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
-x_init = np.ones(ndv)*0.006
+x_init = np.ones(ndv)*0.0035
 pdfs = ndv*[0.]
 pdfs = pdfs + [['uniform'], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])

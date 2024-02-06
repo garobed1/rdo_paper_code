@@ -487,7 +487,7 @@ class CollocationSampler(RobustSampler):
         poly_list = []
         for i in range(self.x_u_dim):
             j = self.x_u_ind[i]
-            pname = self.pdf_name[i]
+            pname = self.pdf_name[j]
             if pname == "beta":
                 # import pdb; pdb.set_trace()
                 poly_list.append(lambda n: _poly_root_types["beta"](n, 
@@ -495,6 +495,8 @@ class CollocationSampler(RobustSampler):
                                                                     beta=self.pdf_list[j].args[0]-1)) # need to subtract one?
                                                                     # alpha=self.pdf_list[j].args[1]-1,
                                                                     # beta=self.pdf_list[j].args[0]-1)) # need to subtract one and reverse?
+            elif pname == "none":
+                print_mpi("nope")
                 # print(poly_list[i](20))
                 # from scipy.stats.distributions import beta
                 # print(beta())
@@ -764,7 +766,8 @@ class AdaptiveSampler(RobustSampler):
         if not self.options['full_refine']:
             # bounds = self.xlimits[self.x_u_ind]
             # import pdb; pdb.set_trace()
-            self.rcrit.set_static(np.atleast_2d(self.x_d_cur[0,:]))
+            self.rcrit.set_static(np.atleast_2d(self.x_d_cur)[0,:])
+            # self.rcrit.set_static(self.x_d_cur[0,:])
 
         modelset = copy.deepcopy(self.rcrit.model) # grab a copy of the current model
 
@@ -804,7 +807,10 @@ class AdaptiveSampler(RobustSampler):
             # give it at most 10 iterations
             N_mc = int((N-N_added)/50)
             if size > 1:
-                N_mc = size*2 # if parallel, do this instead
+                if size > 8:
+                    N_mc = size
+                else:
+                    N_mc = size*2 # if parallel, do this instead
             c = 0
             while not converged and N_added < N:
                 t0 = mf.training_points[None][0][0]
