@@ -175,6 +175,9 @@ class EBSolver(om.ImplicitComponent):
         if mode == 'rev':
             res_array = d_outputs['struct_states']
             d_residuals['struct_states'] = spsolve(self.beam_solver.A.T, res_array)
+        
+        if self.comm.rank == 0:
+            print("Out of solve linear in mphys_eb", flush=True)
 
 class EBGroup(om.Group):
     def initialize(self):
@@ -352,6 +355,9 @@ class EBForce(om.ExplicitComponent):
         for i in range(len(f_z)):
             dfz[i,3*i+2] = -1.
 
+
+        if self.comm.rank == 0:
+            print("Out of compute partials in mphys_eb forces", flush=True)
         partials["struct_force","f_struct"] = dfz
 
 
@@ -414,6 +420,9 @@ class EBDisp(om.ExplicitComponent):
             dus[3*i+2,i] = 1.
             dus[len(u_z)*3 + 3*i+2, i] = 1.
         
+        if self.comm.rank == 0:
+            print("Out of compute partials in mphys_eb disp", flush=True)
+
         partials["u_struct","struct_states"] = np.matmul(dus, duz)
 
 
@@ -500,6 +509,9 @@ class EBFunctions(om.ExplicitComponent):
             partials[item,'dv_struct'] = thingth[item]
             partials[item,'struct_states'] = thingst[item]
 
+        if self.comm.rank == 0:
+            print("Out of compute partials in mphys_eb functions", flush=True)
+
 
 class EBMass(om.ExplicitComponent):
     """
@@ -551,6 +563,9 @@ class EBMass(om.ExplicitComponent):
 
         self.beam_solver.evalFunctions(['mass'])['mass']
         dm_ddv = self.beam_solver.evalMassThSens()
+
+        if self.comm.rank == 0:
+            print("Out of compute partials in mphys_eb mass", flush=True)
         partials['mass','dv_struct'] = dm_ddv#list(self.beam_solver.evalthSens(['mass']).values())
 
 

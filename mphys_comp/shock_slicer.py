@@ -208,10 +208,10 @@ for i in range(ndv):
     x_sur_use[:,i] = x_sur
 
 ### change only few DVS
-# x_sur_use[:,:] = x_sur[0]
+x_sur_use[:,:] = x_sur[1]
 # x_sur_use[:,1] = np.flip(x_sur)
 # x_sur_use[:,0] = x_sur
-# x_sur_use[:,3] = x_sur
+x_sur_use[:,4] = x_sur
     
 # use true values
 x_sur_use[:,ndv] = shocklinetrue

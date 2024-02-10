@@ -81,14 +81,14 @@ ndv = oset.d_dim # number of thickness variables
 
 # eta_use = 1.0
 
-home = '/gpfs/u/home/ODLC/ODLCbdnn/'
-barn = 'barn'
+# home = '/gpfs/u/home/ODLC/ODLCbdnn/'
+# barn = 'barn'
 # name = 'test_case_reload'
-# home = '/home/garobed/'
-# barn = ''
-# mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
+home = '/home/garobed/'
+barn = ''
+mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 # mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_145_145_25.cgns'
-mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
+# mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_long_217_217_25.cgns'
 
 # N_t = 2
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
@@ -408,7 +408,8 @@ probt.setup()
 
 ### MODEL OPENMDAO SETUP ###
 dvdict = OrderedDict()
-probm = om.Problem()
+# probm = om.Problem()
+probm = om.Problem(comm=MPI.COMM_SELF)
 probm.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probm.model.dvs.add_output("x_d", val=x_init)
 

@@ -285,24 +285,44 @@ def quadraticSolveHOnly(x, xn, f, fn, g, gn, return_cond=False):
     # rhs[0] *= 100
     # mat[0,0] *= 100
     #import pdb; pdb.set_trace()
-    sol = lstsq(mat, rhs)
+    if N < 6:
+        sol = lstsq(mat, rhs)
+        Hh = sol[0]
+    else:
+        lamb = 1e-3
+        mat2 = mat.T.dot(mat)
+        sol = lstsq(mat2 + lamb*np.eye(mat.shape[1]), mat.T.dot(rhs))
+        # sol = np.linalg.solve(mat2 + lamb*np.eye(mat.shape[1]), mat.T.dot(rhs))
+        Hh = sol[0]
     # LU, PIV = lu_factor(mat)
     #sol = solve(mat, rhs)
 
     #import pdb; pdb.set_trace()
 
-    Hh = sol[0]
     
     # if 1:
     # if sol[2] != mat.shape[1]:
     # if np.linalg.norm(rhs - mat@Hh) > 1.:
-    #NOTE: MAKE THIS AN OPTION!!! Rank deficient doesn't help this unfortunately
+    #NOTE: MAKE THIS AN OPTION!!! Rank deficient doesn't help this unfortunately\
+    cond = np.linalg.cond(mat)
+    # if sol[2] == 28:
+    #     breakpoint()
+
     if any(abs(Hh) > 1e6):
+        # print(f"H blew up, rank {sol[2]}")
+        # print(cond)
+        
         Hh[:] = 0.
+    # breakpoint()
+
+
+    # else:
+    #     print(f"H good, rank {sol[2]}")
+    #     print(cond)
     #     breakpoint()
 
     if return_cond:
-        return Hh, np.linalg.cond(mat)
+        return Hh, cond
     
 
     return Hh

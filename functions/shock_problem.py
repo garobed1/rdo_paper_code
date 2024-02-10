@@ -128,7 +128,6 @@ class ImpingingShock(Problem):
                                                      use_inflow_comp=True, 
                                                      full_free=False)
 
-
         # NOTE: shouldn't be necessary
         # # set up model inputs
         # dim = self.options["ndim"]
@@ -188,6 +187,7 @@ class ImpingingShock(Problem):
                 #     self.prob.set_val(input, x[i, in_list])
                 # import pdb; pdb.set_trace()
                 self.prob.run_model()
+                self.comm.barrier()
                 if not self.prob.driver.fail:
                     self.fcur[i] = self.prob.get_val(self.options["output"][0])
 

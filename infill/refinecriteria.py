@@ -385,9 +385,10 @@ class ASCriteria():
             return y
 
         self.energy_mode = True
-
+        # print(f"PAST EN PREP {rank}", flush = True)
         # energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
         res = eval_eff(self.e_x, xlimits, dir)
+        # print(f"PAST EN EVAL {rank}", flush = True)
         term = np.sum(res, axis=0)/self.e_x.shape[0]
         if isinstance(term, np.ndarray):
             energy = -np.linalg.norm(term[sub_ind])

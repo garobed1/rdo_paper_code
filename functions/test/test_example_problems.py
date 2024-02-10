@@ -9,12 +9,13 @@ class ProblemDiffTest(unittest.TestCase):
 
     def test_NacaAOALiftModelGradient(self):
         h = 1e-5
-        dim = 1
-        trueFunc = NacaAOALiftModel(ndim=2)
+        dim = 2
+        trueFunc = NacaAOALiftModel(ndim=dim)
         xi = np.random.rand(dim)
         spread = trueFunc.xlimits[:,1] - trueFunc.xlimits[:,0]
         offset = -trueFunc.xlimits[:,0]
         xg = np.random.rand(dim)*spread - offset
+        # xg = np.array([12., 0.])
 
         fgm = trueFunc(np.array([xg-h*xi]))
         fgp = trueFunc(np.array([xg+h*xi]))

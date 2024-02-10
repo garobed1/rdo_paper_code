@@ -368,7 +368,8 @@ raw optimization section
 
 ### MODEL OPENMDAO SETUP ###
 dvdict = OrderedDict()
-probm = om.Problem()
+# probm = om.Problem()
+probm = om.Problem(comm=MPI.COMM_SELF)
 probm.model.add_subsystem("dvs", om.IndepVarComp(), promotes=["*"])
 probm.model.dvs.add_output("x_d", val=x_init)
 

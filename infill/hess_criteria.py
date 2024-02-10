@@ -260,6 +260,7 @@ class HessianRefine(ASCriteria):
         if self.energy_mode:
             # y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
             c = 0
+            print(f"PAST EN EVAL PREP {rank}", flush = True)
             for k in cases[rank]:
             # for k in range(numeval):
                 
@@ -293,7 +294,7 @@ class HessianRefine(ASCriteria):
                 y_[k] = numer/denom
                 c += 1
             
-
+            print(f"PAST EN EVAL LOOP {rank}", flush = True)
         else: 
             c = 0
             for k in cases[rank]:
