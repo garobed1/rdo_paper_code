@@ -638,7 +638,7 @@ class AdaptiveSampler(RobustSampler):
         
         # run sampler for the first time on creation
         self.xlimits = self.options["xlimits"]
-
+        
         # establish criteria
         self.rset = self.options['criteria']
         self.rcrit = None # can only initialize this once we initialize the surrogate
@@ -682,6 +682,12 @@ class AdaptiveSampler(RobustSampler):
             "max_adapt",
             default=50,
             desc="maximum number of points to sample adaptively, after that switch to monte carlo"
+
+        )
+        self.options.declare(
+            "eta_weight",
+            default=None,
+            desc="stuff"
 
         )
 
@@ -762,7 +768,7 @@ class AdaptiveSampler(RobustSampler):
                 self.model.train()
 
         self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
-                                 bounds, self.options["probability_functions"], self.x_u_ind)
+                                 bounds, self.options["probability_functions"], self.x_u_ind, eta_weight=self.options["eta_weight"])
         if not self.options['full_refine']:
             # bounds = self.xlimits[self.x_u_ind]
             # import pdb; pdb.set_trace()
@@ -781,6 +787,7 @@ class AdaptiveSampler(RobustSampler):
         # perform adaptive sampling
         # import pdb; pdb.set_trace()
         if N_use > 0:
+
             mf, rF, d1, d2, d3 = adaptivesampling(self.func, modelset, self.rcrit, bounds, N_use, e_tol = e_tol, batch=batch_use, options=as_options, savefile=resume)
             N_added += d1[-1][0][0].shape[0] - N_before
             if resume is not None:

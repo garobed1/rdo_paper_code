@@ -13,8 +13,9 @@ from scipy.spatial.distance import pdist, cdist, squareform
 from scipy.optimize import Bounds
 from scipy.integrate import nquad
 from scipy.stats import qmc
+from utils.stat_comps import _mu_sigma_comp, _mu_sigma_grad
 from utils.error import _gen_var_lists
-from utils.sutils import print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
+from utils.sutils import convert_to_smt_grads, print_rc_plots, standardization2, linear, quadratic, quadraticSolve, quadraticSolveHOnly, symMatfromVec, maxEigenEstimate, boxIntersect
 
 from mpi4py import MPI
 
@@ -113,6 +114,11 @@ class ASCriteria():
             "pdf_weight",
             None,
             desc="pdf list to weight criteria by"
+        )
+        self.options.declare(
+            "eta_weight",
+            None,
+            desc="for energy calc, account for mean+stdev implementation"
         )
 
 
@@ -256,8 +262,9 @@ class ASCriteria():
             if isinstance(self.pdfs[j], float) or j not in self.sub_ind:
                 weight *= 1.0
             else:
+
                 try:
-                    if self.pdf_name_list[j] == 'uniform':
+                    if self.pdf_name_list[j] == 'uniform' or self.pdf_name_list[j] == 'beta':
                         weight *= self.pdfs[j].pdf(xw[:,j:j+1])[:,0]
                     else:
                         weight *= self.pdfs[j].pdf(qmc.scale(xw[:,j:j+1], bounds[j,0], bounds[j,1]))[:,0]
@@ -388,12 +395,54 @@ class ASCriteria():
         # print(f"PAST EN PREP {rank}", flush = True)
         # energy, d0 = nquad(eval_eff, unit_bounds[sub_ind,:], args=(xlimits, dir))
         res = eval_eff(self.e_x, xlimits, dir)
+
+        # account for mean plus stdev
+        if self.options["eta_weight"] is not None:
+            # get original crit
+            scrit = HessianRefine(self.model, convert_to_smt_grads(self.model), xlimits, sub_index=sub_ind, 
+                                  pdf_weight=self.options["pdf_weight"], neval=self.options['neval'], rho=self.rho, 
+                                  rscale=self.options['rscale'],  scale_by_volume=False, 
+                                  return_rescaled=True, min_contribution=1e-14, 
+                                  print_rc_plots=False)
+
+            def eval_eff2(x, bounds, direction):
+                x = np.atleast_2d(x)
+                x_eff = np.zeros([x.shape[0], n])
+                x_eff[:,sub_ind] = x
+                x_eff[:,fix_ind] = xfix
+
+                y = scrit.evaluate(x_eff, bounds, direction)
+
+                return y
+
+            eta = self.options["eta_weight"]
+            mpart = np.sum(res, axis=0)/self.e_x.shape[0]
+            # Wu = 
+            x_eff = np.zeros([self.e_x.shape[0], n])
+            x_eff[:,sub_ind] = self.e_x
+            x_eff[:,fix_ind] = xfix
+            exs = qmc.scale(x_eff, xlimits[:,0], xlimits[:,1])
+            pdf_list, uncert_list, static_list, scales, pdf_name_list = _gen_var_lists(self.options['pdf_weight'], xlimits)
+            stats, vals = _mu_sigma_comp(self.model.predict_values, exs.shape[0], exs, xlimits, scales[sub_ind], pdf_list, tf = None, weights=None)
+            gstats, gvals = _mu_sigma_grad(self.model.predict_derivatives, exs.shape[0], exs, xlimits, scales[sub_ind], fix_ind, pdf_list, tf = vals, weights=None)
+            mn = stats[0]
+            dmn = gstats[0]
+            Wu = vals - mn
+            work = gvals[:,fix_ind] -dmn
+            dWu = np.linalg.norm(work, axis= 1)*np.sign(work).flatten()
+
+            res2 = eval_eff2(self.e_x, xlimits, dir)
+            spart = abs(np.dot(res, dWu)/self.e_x.shape[0] + np.dot(res2, Wu)/self.e_x.shape[0])
+
+            energy = eta*mpart - (1.-eta)*spart
+            # breakpoint()
         # print(f"PAST EN EVAL {rank}", flush = True)
-        term = np.sum(res, axis=0)/self.e_x.shape[0]
-        if isinstance(term, np.ndarray):
-            energy = -np.linalg.norm(term[sub_ind])
         else:
-            energy = term
+            term = np.sum(res, axis=0)/self.e_x.shape[0]
+            if isinstance(term, np.ndarray):
+                energy = -np.linalg.norm(term[sub_ind])
+            else:
+                energy = term
         
         # multiply by volume ?
         # vol = 1
@@ -402,7 +451,6 @@ class ASCriteria():
         # energy *= vol
 
         self.energy_mode = False
-        # import pdb; pdb.set_trace()
         return -energy
 
     
@@ -971,3 +1019,547 @@ class TEAD(ASCriteria):
 
 
     
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+BAD WORKAROUND INCOMING
+
+
+
+
+"""
+
+
+
+
+
+
+
+from scipy.spatial import KDTree
+from scipy.spatial.distance import pdist, cdist, squareform
+# from scipy.optimize import Bounds
+from utils.sutils import divide_cases, innerMatrixProduct, quadraticSolveHOnly, symMatfromVec, estimate_pou_volume,  standardization2, gen_dist_func_nb
+
+
+
+class HessianRefine(ASCriteria):
+    def __init__(self, model, grad, bounds, **kwargs):
+
+
+        self.grad = grad
+        self.bounds = bounds
+        self.Mc = None
+
+        super().__init__(model, **kwargs)
+        self.name = 'POUHESS'
+
+        self.scaler = 0
+
+        self.supports["obj_derivatives"] = True  
+        
+    def _init_options(self):
+        declare = self.options.declare
+
+        declare(
+            "rscale", 
+            0.5, 
+            types=float,
+            desc="scaling for error model hyperparameter"
+        )
+
+        declare(
+            "rho",
+            None,
+            desc="Distance scaling parameter"
+        )
+        declare(
+            "neval", 
+            3, 
+            types=int,
+            desc="number of closest points to evaluate hessian estimate"
+        )
+
+        declare(
+            "scale_by_cond", 
+            False, 
+            types=bool,
+            desc="scale criteria in a cell by the condition number of the hess approx matrix"
+        )
+        declare(
+            "scale_by_volume", 
+            True, 
+            types=bool,
+            desc="scale criteria in a cell by the approximate volume of the cell"
+        )
+        declare(
+            "out_of_bounds", 
+            0, 
+            types=(int, float),
+            desc="allow optimizer to go out of bounds, then snap inside if it goes there"
+        )
+        declare(
+            "min_contribution",
+            1e-13,
+            types=(float),
+            desc="If not 0.0, use to determine a ball-point radius for which POU numerator contributes greater than it. Then, use a KDTree to query points in that ball during evaluation"
+        )
+
+        declare(
+            "min_points",
+            # size-1,
+            9,
+            # 4,
+            types=int,
+            desc="Minimum number of points to compute distances to if min_contribution is active"
+        )
+
+
+    def initialize(self, model=None, grad=None):
+        
+        # set up constraints
+        # self.condict = {
+        #     "type":"ineq",
+        #     "fun":self.eval_constraint,
+        #     "args":[],
+        # }
+        self.supports["rescaling"] = True
+
+        if(model is not None):
+            self.model = copy.deepcopy(model)
+            kx = 0
+            self.dim = self.model.training_points[None][kx][0].shape[1]
+            self.ntr = self.model.training_points[None][kx][0].shape[0]
+
+        if(grad is not None):
+            self.grad = grad
+
+        #NOTE: Slicing here because GEKPLS appends grad approx
+        if not isinstance(self.model, POUHessian):
+            trxs = self.model.training_points[None][0][0]
+            trfs = self.model.training_points[None][0][1]
+            trg = np.zeros_like(trxs)
+            (
+                trx,
+                trf,
+                X_offset,
+                y_mean,
+                X_scale,
+                y_std,
+            ) = standardization2(trxs, trfs, self.bounds)
+
+            trg = self.grad*(X_scale/y_std)
+
+            self.x_off = X_offset
+            self.x_sca = X_scale
+            self.y_off = y_mean
+            self.y_sca = y_std
+
+        else:
+            trx = self.model.X_norma[0:self.ntr]#model.training_points[None][0][0]
+            trf = self.model.y_norma[0:self.ntr]#training_points[None][0][1]
+            trg = np.zeros_like(trx)
+            # if(isinstance(self.model, GEKPLS)):
+            #     for j in range(self.dim):
+            #         trg[:,j] = self.model.g_norma[:,j].flatten()
+            # else:
+            trg = self.grad*(self.model.X_scale/self.model.y_std)
+
+            self.x_off = self.model.X_offset
+            self.x_sca = self.model.X_scale
+            self.y_off = self.model.y_mean
+            self.y_sca = self.model.y_std
+
+        # Determine rho for the error model
+        if self.options["rho"] is not None:
+            self.rho = self.options["rho"]
+        else:
+            self.rho = self.options['rscale']*pow(self.ntr, 1./self.dim)
+        self.rho2 = 5000. # rho to use for energy calc
+
+        # Generate kd tree for nearest neighbors lookup
+        self.tree = KDTree(trx)
+
+        # Check if the trained surrogate model has hessian data
+        try:
+            self.H = model.h
+            self.Mc = model.Mc
+        except:
+            indn = []
+            nstencil = self.options["neval"]
+            for i in range(self.ntr):
+                dists, ind = self.tree.query(trx[i], nstencil)
+                indn.append(ind)
+            hess = []
+            mcs = np.zeros(self.ntr)
+            for i in range(self.ntr):
+                Hh, mc = quadraticSolveHOnly(trx[i,:], trx[indn[i][1:nstencil],:], \
+                                         trf[i], trf[indn[i][1:nstencil]], \
+                                         trg[i,:], trg[indn[i][1:nstencil],:], return_cond=True)
+
+                hess.append(np.zeros([self.dim, self.dim]))
+                mcs[i] = mc
+                for j in range(self.dim):
+                    for k in range(self.dim):
+                        hess[i][j,k] = Hh[symMatfromVec(j,k,self.dim)]
+
+            # self.h = hess
+            # self.Mc = mcs
+            self.H = comm.allreduce(hess)
+            self.Mc = comm.allreduce(mcs)
+
+        m, n = trx.shape
+
+        # factor in cell volume
+        fakebounds = copy.deepcopy(self.bounds)
+        fakebounds[:,0] = 0.
+        fakebounds[:,1] = 1.
+        if self.options["scale_by_volume"]:
+            self.dV = estimate_pou_volume(trx, fakebounds)
+        else:
+            self.dV = np.ones(trx.shape[0])
+
+    # Assumption is that the quadratic terms are the error
+    def _evaluate(self, x, bounds, dir=0):
+        X_cont = np.atleast_2d(x)
+        cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
+        numeval = X_cont.shape[0]
+        cases = divide_cases(numeval, size)
+        try:
+            delta = self.model.options["delta"]
+        except:
+            delta = 1e-10
+
+        Mc = np.ones(self.ntr)
+        if self.options["scale_by_cond"]:
+            Mc = self.Mc
+
+        trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
+
+        # exhaustive search for closest sample point, for regularization
+        # import pdb; pdb.set_trace()
+        # D = cdist(np.array([x]), trx)
+        # distf = gen_dist_func_nb(parallel=True)
+        distf = cdist
+        # if self.energy_mode and  self.D_cache is None:
+        #     diff = trx.shape[0] - self.D_cache.shape[1]
+
+        #     if diff > 0:
+        #         self.D_cache = np.hstack([self.D_cache, distf(X_cont[cases[rank],:], trx[-diff:,:])])
+        #     # import pdb; pdb.set_trace()
+
+        #     D = self.D_cache
+
+        # else:
+        D = distf(X_cont[cases[rank],:], trx)
+
+        # neighbors
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, self.rho, cap, cmin, self.ntr, cases)
+
+        mindist_p = np.min(D, axis=1)
+        mindist = np.zeros(numeval)
+        c = 0
+        for k in cases[rank]:
+            mindist[k] = mindist_p[c]
+            c += 1
+
+        mindist = comm.allreduce(mindist)
+
+        D = None
+        fac_all = self.dV*Mc
+        y_ = np.zeros(numeval)
+        if self.energy_mode:
+            # y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
+            c = 0
+            print(f"PAST EN EVAL PREP {rank}", flush = True)
+            for k in cases[rank]:
+            # for k in range(numeval):
+                
+                neighbors = neighbors_all
+                if ball_rad:
+                    # neighbors = neighbors_all[k]
+                    neighbors = neighbors_all[c]
+                    xc = trx[neighbors,:]
+                fac = fac_all[neighbors]
+
+                # work = X_cont[k,:] - trx[:self.ntr,:]
+                # work = X_cont[k,:] - xc
+                # # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                # dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)#np.sqrt(D[0][i] + delta)
+                # # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H), fac) # NEWNEWNEW
+                # local = np.einsum('ij,i->ij', self.higher_terms(work, None, self.H[neighbors]), fac) # NEWNEWNEW
+                # expfac = np.exp(-self.rho2*(dist-mindist[k]))
+                # numer = np.einsum('ij,i->j', local, expfac)
+                # denom = np.sum(expfac)
+
+                # work = X_cont[k,:] - trx[:self.ntr,:]
+                work = X_cont[k,:] - xc
+                # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
+                # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                expfac = np.exp(-self.rho2*(dist-mindist[k]))
+                numer = np.dot(local, expfac)
+                denom = np.sum(expfac)
+        
+                y_[k] = numer/denom
+                c += 1
+            
+            print(f"PAST EN EVAL LOOP {rank}", flush = True)
+        else: 
+            c = 0
+            for k in cases[rank]:
+            # for k in range(numeval):
+            # for k in prange(numeval):
+                neighbors = neighbors_all
+                if ball_rad:
+                    # neighbors = neighbors_all[k]
+                    neighbors = neighbors_all[c]
+                    # try:
+                    xc = trx[neighbors,:]
+                    # except:
+                    #     import pdb; pdb.set_trace()
+                fac = fac_all[neighbors]
+
+                # work = X_cont[k,:] - trx[:self.ntr,:]
+                work = X_cont[k,:] - xc
+                # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+                dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
+                # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                expfac = np.exp(-self.rho*(dist-mindist[k]))
+                numer = np.dot(local, expfac)
+                denom = np.sum(expfac)
+        
+                y_[k] = numer/denom
+                c += 1
+        # y_ = pou_crit_loop(X_cont, D, trx, fac, mindist, delta, self.energy_mode, self.higher_terms, self.H, self.rho)
+        
+        y_ = comm.allreduce(y_)
+        ans = -abs(y_)
+
+        
+        """
+        from stack: do this
+        
+        Your comment on the question indicates that you're in the special case of a binary integer linear programming problem. For these problems, a standard approach is to find an optimal solution, add a constraint to eliminate that particular solution, and then reoptimize to find another optimal solution.
+        
+        For example, if your first optimal solution has binary variables with values x1=1
+        , x2=0, x3=1
+        
+        , then you can add the constraint
+        
+        (1−x1)+x2+(1−x3)≥1
+        
+        to eliminate the solution x1=1
+        , x2=0, x3=1.
+        
+        """
+        # if self.energy_mode:
+        #     import pdb; pdb.set_trace()
+        # for batches, loop over already added points to prevent clustering
+        # this should only work for 
+        for i in range(dir):
+            ind = self.ntr + i
+            work = x - trx[ind]
+            # dirdist = np.sqrt(np.dot(work, work)) 
+            dirdist = np.linalg.norm(work) 
+            # ans += 1./(np.dot(work, work) + 1e-10)
+            ans += np.exp(-self.rho*(dirdist + delta))
+
+        return ans 
+    
+
+
+
+
+
+
+
+    # @njit(parallel=True)
+    def _eval_grad(self, x, bounds, dir=0):
+        X_cont = np.atleast_2d(x)
+        numeval = X_cont.shape[0]
+        cap = self.options["min_contribution"]
+        cmin = self.options["min_points"]
+        cases = divide_cases(numeval, size)
+        dim = X_cont.shape[1]
+        try:
+            delta = self.model.options["delta"]
+        except:
+            delta = 1e-10
+
+        Mc = np.ones(self.ntr)
+        if self.options["scale_by_cond"]:
+            Mc = self.Mc
+
+        trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
+        # exhaustive search for closest sample point, for regularization
+        # D = cdist(X_cont, trx)
+        # mindist = np.min(D, axis=1)
+
+        D = cdist(X_cont[cases[rank],:], trx)
+
+        neighbors_all, ball_rad = self.neighbors_func(X_cont, self.rho, cap, cmin, trx.shape[0], cases)
+        mindist_p = np.min(D, axis=1)
+        mindist = np.zeros(numeval)
+        c = 0
+        for k in cases[rank]:
+            mindist[k] = mindist_p[c]
+            c += 1
+
+        mindist = comm.allreduce(mindist)
+
+        fac_all = self.dV*Mc
+
+        y_ = np.zeros(numeval)
+        dy_ = np.zeros([numeval, dim])
+        c = 0
+        for k in cases[rank]:
+        # for k in range(numeval):
+        # for k in prange(numeval):
+
+            neighbors = neighbors_all
+            if ball_rad:
+                # neighbors = neighbors_all[k]
+                neighbors = neighbors_all[c]
+                xc = trx[neighbors,:]
+            fac = fac_all[neighbors]
+
+            # for i in range(self.ntr):
+            # work = X_cont[k,:] - trx[:self.ntr,:] 
+            work = X_cont[k,:] - xc
+            # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
+            dist = np.sqrt(np.einsum('ij,ij->i',work,work)  + delta)
+            # local = self.higher_terms(work, None, self.H)*fac
+            local = self.higher_terms(work, None, self.H[neighbors])*fac
+            # dlocal = self.higher_terms_deriv(work, None, self.H)
+            dlocal = self.higher_terms_deriv(work, None, self.H[neighbors])
+            
+            ddist = np.einsum('i,ij->ij', 1./dist, work)
+            dlocal = np.einsum('i,ij->ij', fac, dlocal)
+
+            expfac = np.exp(-self.rho*(dist-mindist[k]))
+            dexpfac = np.einsum('i,ij->ij',-self.rho*expfac, ddist)
+            numer = np.dot(local,expfac)
+            dnumer =  np.einsum('i,ij->j', local, dexpfac) + np.einsum('i,ij->j', expfac, dlocal)
+            denom = np.sum(expfac)
+            ddenom = np.sum(dexpfac, axis=0)
+
+            y_[k] = numer/denom
+            dy_[k] = (denom*dnumer - numer*ddenom)/(denom**2)
+
+            c += 1
+
+        y_ = comm.allreduce(y_)
+        dy_ = comm.allreduce(dy_)
+        ans = np.einsum('i,ij->ij',-np.sign(y_), dy_)
+
+        #TODO: Parallelize this query as well?
+        # for batches, loop over already added points to prevent clustering
+        for i in range(dir):
+            ind = self.ntr + i
+            work = x - trx[ind]
+            #dwork = np.eye(n)
+            # d2 = np.dot(work, work)
+            # dd2 = 2*work
+            dirdist = np.linalg.norm(work) 
+            # term = 1.0/(d2 + 1e-10)
+            # ans += -1.0/((d2 + 1e-10)**2)*dd2
+            ddirdist = work/dirdist
+            quant = -self.rho*ddirdist*np.exp(-self.rho*(dirdist+ delta))
+            ans += quant
+
+            # import pdb; pdb.set_trace()
+        return ans
+
+    def higher_terms(self, dx, g, h):
+        terms = np.zeros(dx.shape[0])
+        
+        # for j in range(dx.shape[0]):
+        #     terms[j] = 0.5*innerMatrixProduct(h[j], dx[j].T)
+        terms = 0.5*np.einsum('ij,ijk,ik->i', dx, h, dx)
+
+        if self.options["return_rescaled"]:
+            terms *= self.y_sca
+        return terms
+
+    def higher_terms_deriv(self, dx, g, h):
+        # terms = (g*dx).sum(axis = 1)
+        dterms = np.zeros_like(dx)
+        # for j in range(dx.shape[0]):
+        for d in range(dx.shape[1]):
+            # dterms[j,d] = np.dot(h[j,d,:], dx[j,:])#0.5*innerMatrixProduct(h, dx)
+            dterms = np.einsum('ik, ik ->i', h[:,d,:], dx)
+
+        if self.options["return_rescaled"]:
+            dterms *= self.y_sca
+        return dterms
+
+
+
+    def _pre_asopt(self, bounds, dir=0):
+        trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
+
+        # m, n = trx.shape
+
+        # # factor in cell volume
+        # fakebounds = copy.deepcopy(bounds)
+        # fakebounds[:,0] = 0.
+        # fakebounds[:,1] = 1.
+        # if self.options["scale_by_volume"]:
+        #     self.dV = estimate_pou_volume(trx, fakebounds)
+        # else:
+        #     self.dV = np.ones(trx.shape[0])
+        # if(self.options["out_of_bounds"]):
+        #     for i in range(self.dim):
+        #         bounds[i][0] = -self.options["out_of_bounds"]
+        #         bounds[i][1] = 1. + self.options["out_of_bounds"]
+
+        return None, bounds# + 0.001*self.dminmax+randvec, bounds
+
+
+
+    def _post_asopt(self, x, bounds, dir=0):
+
+        #snap to edge if needed 
+        # for i in range(self.dim):
+        #     if(x[i] > 1.0):
+        #         x[i] = 1.0
+        #     if(x[i] < 0.0):
+        #         x[i] = 0.0
+
+        return x
+    
+
+    def neighbors_func(self, X_cont, rho, cap, cmin, numsample, cases):
+
+        neighbors_all = list(range(numsample))
+        ball_rad = None
+        if(cap):
+            ball_rad = -np.log(cap)/rho
+            neighbors_all = self.tree.query_ball_point(X_cont[cases[rank],:], ball_rad)
+            redo = []
+            for i in range(len(neighbors_all)):
+                over = len(neighbors_all[i]) - cmin
+                if over < 0:
+                    redo.append(i)
+
+            if len(redo) > 0:
+                dum, neighbors_redo = self.tree.query(X_cont[cases[rank],:][redo,:], cmin)
+
+                for j in range(len(neighbors_redo)):
+                    neighbors_all[redo[j]] = neighbors_redo[j]
+        
+        return neighbors_all, ball_rad
+

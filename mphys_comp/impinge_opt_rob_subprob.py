@@ -94,7 +94,8 @@ mesh = f'{home}{barn}/garo-rpi-graduate-work/meshes/imp_mphys_73_73_25.cgns'
 inputs = ["dv_struct_TRUE", "shock_angle", "M0"]
 x_init = np.ones(ndv)*0.0035
 pdfs = ndv*[0.]
-pdfs = pdfs + [['uniform'], ['uniform']]
+# pdfs = pdfs + [['uniform'], ['uniform']]
+pdfs = pdfs + [['beta', 5., 2.], ['uniform']]
 xlimits = np.zeros([ndv+2, 2])
 xlimits[:ndv,0] = 0.0009
 xlimits[:ndv,1] = 0.007
@@ -178,6 +179,10 @@ full_surrogate = oset.full_surrogate
 retain_uncertain_points = oset.retain_uncertain_points
 retain_uncertain_points_T = oset.retain_uncertain_points_T
 eta_use = oset.eta_use
+if eta_use < 0.99:
+    eta_weight = eta_use
+else:
+    eta_weight = None
 use_truth_to_train = oset.use_truth_to_train
 ref_strategy = oset.ref_strategy
 
@@ -281,6 +286,7 @@ elif(sample_type_m == 'Adaptive'):
                           xlimits=xlimits, 
                           probability_functions=pdfs, 
                           as_options=as_options,
+                          eta_weight=eta_weight,
                           retain_uncertain_points=retain_uncertain_points,
                           external_only=external_only)
 else:

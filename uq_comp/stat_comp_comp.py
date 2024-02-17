@@ -305,6 +305,7 @@ class StatCompComponent(om.ExplicitComponent):
         else:
             self.sampler.generate_uncertain_points(self.sampler.N, func=self.func, model=self.surrogate)
         # train the surrogate if available AND we have moved
+            
         if self.surrogate and (moved or not self.first_train):
             # TODO: find a way to add samples
             # Choose between surrogate over just x_u,
@@ -337,6 +338,7 @@ class StatCompComponent(om.ExplicitComponent):
             self.surrogate.set_training_values(self.xtrain_act, self.ftrain_act)
             convert_to_smt_grads(self.surrogate, self.xtrain_act, self.gtrain_act)
             self.surrogate.train()
+
             self.first_train = True
 
         gres = stat_comp(self.surrogate, self.func, 

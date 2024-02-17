@@ -83,8 +83,11 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
+pdfs = [['beta', 1., 3.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
+
+# beta_bounds = []
+# beta_bounds.append([1., 3.])
 
 ##### Optimization options #####
 max_outer = 50

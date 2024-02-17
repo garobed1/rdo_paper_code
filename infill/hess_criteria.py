@@ -488,7 +488,6 @@ class HessianRefine(ASCriteria):
 
 
     def _pre_asopt(self, bounds, dir=0):
-        
         trx = qmc.scale(self.trx, bounds[:,0], bounds[:,1], reverse=True)
 
         # m, n = trx.shape
