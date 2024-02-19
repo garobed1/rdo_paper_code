@@ -3,6 +3,7 @@ from functions.example_problems import BetaRobust1D, BetaRobustEx1D, ToyLinearSc
 from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine, ShortColumn, ShortColumn1U, UncertainEllipse
 from smt.problems import TensorProduct, Branin, Sphere, LpNorm, Rosenbrock, WaterFlow, WeldedBeam, RobotArm, CantileverBeam, WingWeight
 from functions.shock_problem import ImpingingShock
+from functions.aoa_problem import NacaAOALiftModel
 from mpi4py import MPI
 import mphys_comp.impinge_setup as default_impinge_setup
 
@@ -83,6 +84,8 @@ def GetProblem(prob, dim, alpha = 8., use_design=False, fix_radius=None, fix_foc
         trueFunc = UncertainEllipse(fix_radius=None, fix_foci=None)
     elif(prob == "uellipse_rad"):
         trueFunc = UncertainEllipse(fix_radius=None)
+    elif(prob == "nacalift"):
+        trueFunc = NacaAOALiftModel()
     else:
         raise ValueError("Given problem not valid.")
 

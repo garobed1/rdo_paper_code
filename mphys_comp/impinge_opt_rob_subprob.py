@@ -505,8 +505,8 @@ sub_optimizer.prob_model.final_setup()
 
 rec_t = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_truth.sql')
 rec_m = om.SqliteRecorder(f'/{root}/{path}/{title}' + '_model.sql')
-sub_optimizer.prob_truth.add_recorder(rec_t)
-sub_optimizer.prob_model.add_recorder(rec_m)
+# sub_optimizer.prob_truth.add_recorder(rec_t)
+# sub_optimizer.prob_model.add_recorder(rec_m)
 sub_optimizer.prob_truth.driver.recording_options['record_inputs'] = True
 sub_optimizer.prob_truth.driver.recording_options['record_outputs'] = True
 sub_optimizer.prob_truth.driver.recording_options['record_residuals'] = True

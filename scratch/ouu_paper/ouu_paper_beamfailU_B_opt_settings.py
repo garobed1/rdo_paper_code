@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_beamfailD_A'
+name = 'ouu_paper_beamfailU_A'
 path = '.'
 
 
@@ -8,9 +8,9 @@ path = '.'
 This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
-u_dim = 1
-d_dim = 2
-prob = 'shortcol1u'
+u_dim = 3
+d_dim = 1
+prob = 'shortcol'
 p_con = False
 p_eq = None
 p_ub = 3.
@@ -35,7 +35,7 @@ retain_uncertain_points_T = True
 use_design_noise = False #NEW, ONLY IF USING SURR
 design_noise = 0.0
 design_noise_act = 0.0
-
+tol_ignore_sdist = True
 
 ##### trust region #####
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
@@ -48,7 +48,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = [9.,15.]
+x_init = 9.
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -59,7 +59,8 @@ trust_increase_terminate = False
 # xi
 
 ##### UQ Parameters #####
-eta_use = 1.0
+nstd = 3
+eta_use = 1.0 - nstd/(nstd+1)
 if not approximate_truth:
     N_t = approximate_truth_max
 else:
@@ -82,7 +83,7 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['norm', 500., 100.], 0., 0.] # replace 2nd arg with the current design var
+pdfs = [['norm', 500., 100.], ['norm', 2000., 400.], ['lognorm', 5., 0.5], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####

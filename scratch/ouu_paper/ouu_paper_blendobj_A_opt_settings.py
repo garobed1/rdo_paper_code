@@ -1,5 +1,5 @@
 # naming
-name = 'test_freezes'
+name = 'ouu_paper_blendobj_A'
 path = '.'
 
 

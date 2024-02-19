@@ -1,5 +1,6 @@
 # naming
-name = 'ouu_paper_beamfailD_A'
+# name = 'test_blendcon_A'
+name = 'ouu_paper_blendcon_A'
 path = '.'
 
 
@@ -9,11 +10,11 @@ This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
 u_dim = 1
-d_dim = 2
-prob = 'shortcol1u'
-p_con = False
+d_dim = 1
+prob = 'betatestex'
+p_con = True
 p_eq = None
-p_ub = 3.
+p_ub = -1.5
 p_lb = None
 
 # refinement threshold strategies
@@ -41,14 +42,14 @@ design_noise_act = 0.0
 trust_region_bound = 2    #NEW 1: use nonlinear sphere component
                             #  2: use dv bound constraints instead of nonlinear sphere
 initial_trust_radius = 0.1 #"""We're making this relative to the design bound scale"""
-xi = 0.1
+xi = 0.01
 # eta1
 # eta2
 # gamma1
 # gamma2
 
 ##### optimization #####
-x_init = [9.,15.]
+x_init = 8.5
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -59,7 +60,8 @@ trust_increase_terminate = False
 # xi
 
 ##### UQ Parameters #####
-eta_use = 1.0
+nstd = 3
+eta_use = 1.0 - nstd/(nstd+1)
 if not approximate_truth:
     N_t = approximate_truth_max
 else:
@@ -82,11 +84,11 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['norm', 500., 100.], 0., 0.] # replace 2nd arg with the current design var
+pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
-max_outer = 20
+max_outer = 10
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 

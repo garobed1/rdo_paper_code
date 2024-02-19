@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_beamfailD_A'
+name = 'ouu_paper_rosencirc_A'
 path = '.'
 
 
@@ -10,10 +10,10 @@ Only support this one robust quantity for the time being
 """
 u_dim = 1
 d_dim = 2
-prob = 'shortcol1u'
-p_con = False
+prob = 'uellipse_rad'
+p_con = True
 p_eq = None
-p_ub = 3.
+p_ub = 0.
 p_lb = None
 
 # refinement threshold strategies
@@ -48,18 +48,20 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = [9.,15.]
+x_init = [-1., 1.]
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
 approximate_truth_max = 5000*u_dim
 trust_increase_terminate = False
+tol_ignore_sdist = True
 # gtol 
 # stol
 # xi
 
 ##### UQ Parameters #####
-eta_use = 1.0
+nstd = 3
+eta_use = 1.0 - nstd/(nstd+1)
 if not approximate_truth:
     N_t = approximate_truth_max
 else:
@@ -82,8 +84,13 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['norm', 500., 100.], 0., 0.] # replace 2nd arg with the current design var
+import numpy as np
+pdfs = [0., 0., ['norm', np.sqrt(1), 0.2]] #sigma = 0.2 # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
+
+# in case we use a beta dist, modify function limits with this
+beta_bounds=[]
+beta_bounds.append([0., 1.0])
 
 ##### Optimization options #####
 max_outer = 20

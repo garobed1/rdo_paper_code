@@ -59,7 +59,6 @@ trust_increase_terminate = False
 # xi
 
 ##### UQ Parameters #####
-u_dim = 1
 nstd = 3
 eta_use = 1.0 - nstd/(nstd+1)
 if not approximate_truth:
@@ -84,8 +83,8 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-# pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
-pdfs = [['uniform'], 0.] # replace 2nd arg with the current design var
+pdfs = [['beta', 3., 1.], 0.] # replace 2nd arg with the current design var
+# pdfs = [['uniform'], 0.] # replace 2nd arg with the current design var
 
 ##### Optimization options #####
 max_outer = 10

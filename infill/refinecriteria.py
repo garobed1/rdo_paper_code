@@ -429,12 +429,12 @@ class ASCriteria():
             dmn = gstats[0]
             Wu = vals - mn
             work = gvals[:,fix_ind] -dmn
-            dWu = np.linalg.norm(work, axis= 1)*np.sign(work).flatten()
+            dWu = np.einsum(np.linalg.norm(work, axis= 1))#*np.sign(work).flatten())
 
             res2 = eval_eff2(self.e_x, xlimits, dir)
             spart = abs(np.dot(res, dWu)/self.e_x.shape[0] + np.dot(res2, Wu)/self.e_x.shape[0])
 
-            energy = eta*mpart - (1.-eta)*spart
+            energy = eta*mpart - (1.-eta)*np.sqrt(spart)
             # breakpoint()
         # print(f"PAST EN EVAL {rank}", flush = True)
         else:

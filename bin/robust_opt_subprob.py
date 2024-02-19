@@ -130,11 +130,21 @@ try:
     p_eq = oset.p_eq
     p_ub = oset.p_ub
     p_lb = oset.p_lb
+    
 except:
     p_con = False
     p_eq = None
     p_ub = None
     p_lb = None
+
+try:
+    min_dual = oset.min_dual
+except:
+    min_dual = 1e-2
+try:
+    max_adapt = sset.max_adapt
+except:
+    max_adapt = 50
 
 # uq settings
 use_surrogate = oset.use_surrogate
@@ -260,6 +270,7 @@ elif(sample_type_m == 'Adaptive'):
                           probability_functions=pdfs, 
                           as_options=as_options,
                           eta_weight=eta_weight,
+                          max_adapt=max_adapt,
                           retain_uncertain_points=retain_uncertain_points,
                           external_only=external_only)
 else:
@@ -421,6 +432,7 @@ if trust_region_bound: #anything but 0
                                     truth_func_err_est=approximate_truth,
                                     truth_func_err_est_max=approximate_truth_max,
                                     trust_increase_terminate=trust_increase_terminate,
+                                    min_dual=min_dual,
                                     tol_ignore_sdist=tol_ignore_sdist)
 else:
     sub_optimizer = SequentialFullSolve(prob_model=probm, prob_truth=probt, 

@@ -59,7 +59,8 @@ trust_increase_terminate = False
 # xi
 
 ##### UQ Parameters #####
-eta_use = 1.0
+nstd = 3
+eta_use = 1.0 - nstd/(nstd+1)
 if not approximate_truth:
     N_t = approximate_truth_max
 else:

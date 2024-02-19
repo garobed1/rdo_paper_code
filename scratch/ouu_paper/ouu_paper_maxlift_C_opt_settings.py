@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_beamfailD_A'
+name = 'ouu_paper_maxlift_C'
 path = '.'
 
 
@@ -9,8 +9,8 @@ This function can serve as an objective or a constraint
 Only support this one robust quantity for the time being
 """
 u_dim = 1
-d_dim = 2
-prob = 'shortcol1u'
+d_dim = 1
+prob = 'nacalift'
 p_con = False
 p_eq = None
 p_ub = 3.
@@ -48,7 +48,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = [9.,15.]
+x_init = 25.0
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -59,6 +59,7 @@ trust_increase_terminate = False
 # xi
 
 ##### UQ Parameters #####
+u_dim = 1
 eta_use = 1.0
 if not approximate_truth:
     N_t = approximate_truth_max
@@ -82,11 +83,14 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [['norm', 500., 100.], 0., 0.] # replace 2nd arg with the current design var
+pdfs = [0., ['normal', 0., 1.]] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
+# beta_bounds = []
+# beta_bounds.append([1., 3.])
+
 ##### Optimization options #####
-max_outer = 20
+max_outer = 50
 opt_settings = {}
 opt_settings['ACC'] = 1e-6
 
