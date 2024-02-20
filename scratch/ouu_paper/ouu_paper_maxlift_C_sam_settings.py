@@ -5,7 +5,7 @@ runs_per_proc = 1
 stype = "pouhess"   #surrogate type
 
 ### FOR POU HESS
-max_adapt = 0
+max_adapt = 1
 rtype =  "hessgrad"
 opt = 'SLSQP'#'L-BFGS-B' #'SLSQP'#
 local = True

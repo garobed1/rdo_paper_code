@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_beamfailD_A'
+name = 'ouu_paper_beamfailD_B'
 path = '.'
 
 

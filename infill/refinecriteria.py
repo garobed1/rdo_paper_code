@@ -429,7 +429,7 @@ class ASCriteria():
             dmn = gstats[0]
             Wu = vals - mn
             work = gvals[:,fix_ind] -dmn
-            dWu = np.einsum(np.linalg.norm(work, axis= 1))#*np.sign(work).flatten())
+            dWu = np.linalg.norm(work, axis= 1)#*np.sign(work).flatten())
 
             res2 = eval_eff2(self.e_x, xlimits, dir)
             spart = abs(np.dot(res, dWu)/self.e_x.shape[0] + np.dot(res2, Wu)/self.e_x.shape[0])
@@ -1281,7 +1281,7 @@ class HessianRefine(ASCriteria):
         if self.energy_mode:
             # y_ = np.zeros([numeval, X_cont.shape[1]])#self.higher_terms(X_cont[0,:] - trx, None, self.H).shape[1]])
             c = 0
-            print(f"PAST EN EVAL PREP {rank}", flush = True)
+            # print(f"PAST EN EVAL PREP {rank}", flush = True)
             for k in cases[rank]:
             # for k in range(numeval):
                 
@@ -1315,7 +1315,7 @@ class HessianRefine(ASCriteria):
                 y_[k] = numer/denom
                 c += 1
             
-            print(f"PAST EN EVAL LOOP {rank}", flush = True)
+            # print(f"PAST EN EVAL LOOP {rank}", flush = True)
         else: 
             c = 0
             for k in cases[rank]:

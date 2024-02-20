@@ -1,5 +1,5 @@
 # naming
-name = 'ouu_paper_scalecon_A'
+name = 'ouu_paper_scalecon_B'
 path = '.'
 
 

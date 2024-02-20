@@ -48,7 +48,7 @@ xi = 0.1
 # gamma2
 
 ##### optimization #####
-x_init = 25.0
+x_init = 4.0
 inexact_gradient_only = False
 approximate_model = True
 approximate_truth = False
@@ -84,7 +84,7 @@ scN_m = 2
 scjump = 1 # stochastic collocation jump
 
 ##### UQ Input PDFS #####
-pdfs = [0., ['normal', 0., 1.]] # replace 2nd arg with the current design var
+pdfs = [0., ['norm', 0., 1.]] # replace 2nd arg with the current design var
 # pdfs = ['uniform', 0.] # replace 2nd arg with the current design var
 
 # beta_bounds = []

@@ -1,6 +1,6 @@
 # naming
 # name = 'test_blendcon_A'
-name = 'ouu_paper_blendcon_A'
+name = 'ouu_paper_blendcon_B'
 path = '.'
 
 
