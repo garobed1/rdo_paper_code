@@ -1,6 +1,4 @@
-## Graduate Work Repository
-
-A repository for all the code I use for my graduate work.
+## RDO Paper Code Repository
 
 Dependencies:
 - adflow
@@ -13,4 +11,3 @@ Dependencies:
 - SMT: Surrogate Modeling Toolbox
 
 
-Currently reorganizing the file structure to assist further development, some refactoring may be involved
