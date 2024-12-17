@@ -4,7 +4,7 @@ import copy
 from optimization.defaults import DefaultOptOptions
 import numpy as np
 from smt.surrogate_models import GEKPLS
-from surrogate.direct_gek import DGEK
+# from surrogate.direct_gek import DGEK
 from scipy.stats import qmc
 from surrogate.pougrad import POUSurrogate
 from utils.error import rmse, meane, full_error

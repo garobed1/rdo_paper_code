@@ -17,7 +17,7 @@ class NacaAOALiftModel(Problem):
         # AOA
         self.xlimits[0, 0] = 0.
         self.xlimits[0, 1] = 20.
-        # AOA perturn
+        # AOA perturb
         self.xlimits[1, 0] = -3.
         self.xlimits[1, 1] = 3.
         # RE

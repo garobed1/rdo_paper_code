@@ -286,7 +286,9 @@ class HessianRefine(ASCriteria):
                 # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
                 dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
                 # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
-                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                # local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, [self.H[q] for q in neighbors])*fac # NEWNEWNEW
+                
                 expfac = np.exp(-self.rho2*(dist-mindist[k]))
                 numer = np.dot(local, expfac)
                 denom = np.sum(expfac)
@@ -315,7 +317,8 @@ class HessianRefine(ASCriteria):
                 # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
                 dist = np.sqrt(np.einsum('ij,ij->i',work,work) + delta)
                 # local = self.higher_terms(work, None, self.H)*fac # NEWNEWNEW
-                local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                # local = self.higher_terms(work, None, self.H[neighbors])*fac # NEWNEWNEW
+                local = self.higher_terms(work, None, [self.H[q] for q in neighbors])*fac # NEWNEWNEW
                 expfac = np.exp(-self.rho*(dist-mindist[k]))
                 numer = np.dot(local, expfac)
                 denom = np.sum(expfac)
@@ -421,9 +424,12 @@ class HessianRefine(ASCriteria):
             # dist = np.sqrt(D[k,:]**2 + delta)#np.sqrt(D[0][i] + delta)
             dist = np.sqrt(np.einsum('ij,ij->i',work,work)  + delta)
             # local = self.higher_terms(work, None, self.H)*fac
-            local = self.higher_terms(work, None, self.H[neighbors])*fac
+            # local = self.higher_terms(work, None, self.H[neighbors])*fac
+            local = self.higher_terms(work, None, [self.H[q] for q in neighbors])*fac # NEWNEWNEW
+
             # dlocal = self.higher_terms_deriv(work, None, self.H)
-            dlocal = self.higher_terms_deriv(work, None, self.H[neighbors])
+            # dlocal = self.higher_terms_deriv(work, None, self.H[neighbors])
+            dlocal = self.higher_terms_deriv(work, None, [self.H[q] for q in neighbors])
             
             ddist = np.einsum('i,ij->ij', 1./dist, work)
             dlocal = np.einsum('i,ij->ij', fac, dlocal)

@@ -1,8 +1,9 @@
 import numpy as np
 from functions.example_problems import BetaRobust1D, BetaRobustEx1D, ToyLinearScale, Ishigami, Peaks2D, QuadHadamard, MultiDimJump, MultiDimJumpTaper, FuhgSingleHump, FuhgP3, FuhgP8, FuhgP9, FuhgP10, FakeShock
 from functions.example_problems_2 import ALOSDim, ScalingExpSine, MixedSine, ShortColumn, ShortColumn1U, UncertainEllipse
+from functions.example_problems_3 import Hartmann4, Hartmann4Noise
 from smt.problems import TensorProduct, Branin, Sphere, LpNorm, Rosenbrock, WaterFlow, WeldedBeam, RobotArm, CantileverBeam, WingWeight
-from functions.shock_problem import ImpingingShock
+# from functions.shock_problem import ImpingingShock
 from functions.aoa_problem import NacaAOALiftModel
 from mpi4py import MPI
 import mphys_comp.impinge_setup as default_impinge_setup
@@ -86,6 +87,10 @@ def GetProblem(prob, dim, alpha = 8., use_design=False, fix_radius=None, fix_foc
         trueFunc = UncertainEllipse(fix_radius=None)
     elif(prob == "nacalift"):
         trueFunc = NacaAOALiftModel()
+    elif(prob == "hartmann4"):
+        trueFunc = Hartmann4()
+    elif(prob == "hartmann4noise"):
+        trueFunc = Hartmann4Noise()
     else:
         raise ValueError("Given problem not valid.")
 

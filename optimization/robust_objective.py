@@ -755,19 +755,22 @@ class AdaptiveSampler(RobustSampler):
                 # add back training points
                 t0 = self.model.training_points[None][0][0]
                 f0 = self.model.training_points[None][0][1]
-                g0 = convert_to_smt_grads(self.model)
 
                 # add points
                 t0 = np.append(t0, progress['x'], axis=0)
                 f0 = np.append(f0, progress['f'], axis=0)
-                g0 = np.append(g0, progress['g'], axis=0)
 
                 # train
                 self.model.set_training_values(t0, f0)
-                convert_to_smt_grads(self.model, t0, g0)
+                if self.model.supports['training_derivatives']:
+                    g0 = convert_to_smt_grads(self.model)
+                    g0 = np.append(g0, progress['g'], axis=0)
+                    convert_to_smt_grads(self.model, t0, g0)
                 self.model.train()
+        
 
-        self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
+        # self.rcrit = GetCriteria(sset, self.model, convert_to_smt_grads(self.model), 
+        self.rcrit = GetCriteria(sset, self.model, self.current_samples['g'], 
                                  bounds, self.options["probability_functions"], self.x_u_ind, eta_weight=self.options["eta_weight"])
         if not self.options['full_refine']:
             # bounds = self.xlimits[self.x_u_ind]
@@ -813,16 +816,15 @@ class AdaptiveSampler(RobustSampler):
             # if not, add Monte Carlo points until tol is satisfied or N is reached
             # give it at most 10 iterations
             N_mc = int((N-N_added)/50)
-            if size > 1:
-                if size > 8:
-                    N_mc = size
-                else:
-                    N_mc = size*2 # if parallel, do this instead
+            # if size > 1:
+            #     if size > 8:
+            #         N_mc = size
+            #     else:
+            #         N_mc = size*2 # if parallel, do this instead
             c = 0
             while not converged and N_added < N:
                 t0 = mf.training_points[None][0][0]
                 f0 = mf.training_points[None][0][1]
-                g0 = convert_to_smt_grads(mf)
 
                 # add points
                 tx_mc = None
@@ -832,12 +834,23 @@ class AdaptiveSampler(RobustSampler):
                 xnew = rF.post_asopt(tx_mc, bounds)
                 t0 = np.append(t0, xnew, axis=0)
                 f0 = np.append(f0, self.func(xnew), axis=0)
-                g0 = np.append(g0, convert_to_smt_grads(self.func, xnew), axis=0)
                 N_added += N_mc
 
                 # train
+
+                if mf.supports["training_derivatives"]:
+                    # import pdb; pdb.set_trace()
+                    g0 = convert_to_smt_grads(mf)
+                else:
+                    g0 = rF.grad
+
+                g0 = np.append(g0, convert_to_smt_grads(self.func, xnew), axis=0)
+                
+
                 mf.set_training_values(t0, f0)
-                convert_to_smt_grads(mf, t0, g0)
+                if mf.supports["training_derivatives"]:
+                    convert_to_smt_grads(mf, t0, g0)
+                
                 mf.train()
 
                 # evaluate rcrit energy
@@ -875,7 +888,10 @@ class AdaptiveSampler(RobustSampler):
         # set evaluations internally
         tx = mf.training_points[None][0][0]
         tf = mf.training_points[None][0][1]
-        tg = convert_to_smt_grads(mf)
+        if mf.supports['training_derivatives']:
+            tg = convert_to_smt_grads(mf)
+        else:
+            tg = rF.grad
         self.set_evaluated_func(tf)
         self.set_evaluated_grad(tg)
 

@@ -7,6 +7,7 @@ import openmdao.api as om
 from uq_comp.stat_comp_comp import StatCompComponent
 from optimization.opt_subproblem import SequentialFullSolve
 from optimization.opt_trust_uncertain import UncertainTrust
+from smt.surrogate_models import KPLS, GEKPLS, KRG
 from surrogate.pougrad import POUHessian
 from collections import OrderedDict
 from utils.om_utils import grad_opt_feas
@@ -19,6 +20,8 @@ import argparse
 from optimization.robust_objective import _gen_var_lists
 from mpi4py import MPI
 import pickle
+import sys,os
+sys.path.append(os.getcwd())
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -35,11 +38,13 @@ run a mean plus variance optimization over the 1D-1D test function, test out the
 parser = argparse.ArgumentParser()
 parser.add_argument('-o', '--optfile', action='store', default='ouu_opt_settings.py', help = 'python file containing settings for optimization parameters')
 parser.add_argument('-s', '--samplingfile', action='store', default='ouu_sam_settings.py', help = 'python file containing settings for adaptive sampling parameters')
+parser.add_argument('-d', '--datadir', action='store', default=None, help = 'initial data to be used in addition to points at start')
+
 
 args = parser.parse_args()
 osetfile = args.optfile
 ssetfile = args.samplingfile
-
+datadir = args.datadir
 
 
 
@@ -62,6 +67,8 @@ optuse = '.'.join(optsplit)
 if optuse.endswith('.py'):
     optuse = optuse.split('.')[:-1]
     optuse = '.'.join(optuse)
+# print(root)
+# import pdb; pdb.set_trace()
 oset = importlib.import_module(optuse)
 title = f"{oset.name}_{oset.prob}_U{oset.u_dim}D_D{oset.d_dim}D"
 if(oset.path == None):
@@ -209,31 +216,39 @@ xlimits_u = xlimits[sampler_t.x_u_ind]
 ##### SURROGATE MODEL PARAMETERS #####
 #TODO: WRITE SURROGATE PICKER
 msur = None
-min_contribution = 1e-14
 if use_surrogate:
-    rscale = 5.5
-    if hasattr(sset, 'rscale'):
-        rscale = sset.rscale
-    rho = 10 
-    if hasattr(sset, 'rho'):
-        rscale = sset.rho
-    # NOTE: NON-ZERO CAUSES NANS
-    # not anymore
-    # min_contributions = 1e-12
-    min_contributions = 1e-14
-
-    if(full_surrogate):
-        sdim = t_dim
-        msur = POUHessian(bounds=xlimits, rscale = 5.5, neval = t_dim+3, min_contribution = min_contribution)
+    if(sset.stype == "kriging"):
+        msur = KRG()
+        # modelbase.options.update({"hyper_opt":'TNC'})
+        msur.options.update({"corr":sset.corr})
+        msur.options.update({"poly":sset.poly})
+        msur.options.update({"n_start":5})
+        msur.options.update({"eval_noise":False})
+        msur.options.update({"noise0":[1e-10]})
     else:
-        sdim = u_dim
-        msur = POUHessian(bounds=xlimits_u, rscale = 5.5, neval = u_dim+3, min_contribution = min_contribution)
+        rscale = 5.5
+        if hasattr(sset, 'rscale'):
+            rscale = sset.rscale
+        rho = 10 
+        if hasattr(sset, 'rho'):
+            rscale = sset.rho
+        # NOTE: NON-ZERO CAUSES NANS
+        # not anymore
+        # min_contributions = 1e-12
+        min_contributions = 1e-14
 
-    neval = sset.neval_fac*t_dim+sset.neval_add
-    msur.options.update({"rscale":rscale})
-    msur.options.update({"rho":rho})
-    msur.options.update({"neval":neval})
-    msur.options.update({"min_contribution":min_contributions})
+        if(full_surrogate):
+            sdim = t_dim
+            msur = POUHessian(bounds=xlimits, rscale = 5.5, neval = t_dim+3, min_contribution = min_contributions)
+        else:
+            sdim = u_dim
+            msur = POUHessian(bounds=xlimits_u, rscale = 5.5, neval = u_dim+3, min_contribution = min_contributions)
+
+        neval = sset.neval_fac*t_dim+sset.neval_add
+        msur.options.update({"rscale":rscale})
+        msur.options.update({"rho":rho})
+        msur.options.update({"neval":neval})
+        msur.options.update({"min_contribution":min_contributions})
     msur.options.update({"print_prediction":False})
     msur.options.update({"print_global":False})
 
@@ -282,6 +297,37 @@ else:
                           external_only=external_only)
 
 
+
+### PRECOMP DATA SETUP ###
+if datadir is not None:
+
+    i = 0
+
+    with open(f'/{root}/{datadir}/x_0.npy', 'rb') as f:
+        x_list = pickle.load(f)
+    with open(f'/{root}/{datadir}/y_0.npy', 'rb') as f:
+        y_list = pickle.load(f)
+    with open(f'/{root}/{datadir}/g_uq_0.npy', 'rb') as f:
+        g_uq_list = pickle.load(f)
+    with open(f'/{root}/{datadir}/g_dv_0.npy', 'rb') as f:
+        g_dv_list = pickle.load(f)
+
+    x_extra = np.array(x_list)
+    y_extra = np.array(y_list)
+
+    g_dv_extra = np.array(g_dv_list)
+    g_uq_extra = np.array(g_uq_list)
+
+    # attach uq to dv
+    g_extra = np.append(g_dv_extra, g_uq_extra, axis = 1)
+
+    pmcur = sampler_m.current_samples
+    pmcur['x'] = x_extra
+    pmcur['f'] = y_extra
+    pmcur['g'] = g_extra
+    sampler_m.initialize(reset=True)
+    sampler_m.set_design(np.array([x_init]))
+    sampler_m.add_data(pmcur, replace_current=True)
 
 
 
@@ -361,22 +407,22 @@ probt.run_model()
 raw optimization section
 """
 
-# probt.run_driver()
+probt.run_driver()
 
-# x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
+x_opt_true = copy.deepcopy(probt.get_val("stat.x_d")[0])
 
-# # plot conv
-# cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
-# plt.xlabel(r"Number of function calls")
-# plt.ylabel(r"$\mu_f(x_d)$")
-# #plt.legend(loc=1)
-# plt.savefig(f"/{root}/{path}/{title}/convergence_truth.png", bbox_inches="tight")
-# plt.clf()
+# plot conv
+cs = plt.plot(probt.model.stat.func_calls, probt.model.stat.objs)
+plt.xlabel(r"Number of function calls")
+plt.ylabel(r"$\mu_f(x_d)$")
+#plt.legend(loc=1)
+plt.savefig(f"/{root}/{path}/{title}/convergence_truth.png", bbox_inches="tight")
+plt.clf()
 
-# true_fm = copy.deepcopy(probt.model.stat.objs[-1])
+true_fm = copy.deepcopy(probt.model.stat.objs[-1])
 
-# probt.set_val("stat.x_d", x_init)
-# import pdb; pdb.set_trace()
+probt.set_val("stat.x_d", x_init)
+breakpoint()
 """ 
 raw optimization section
 """

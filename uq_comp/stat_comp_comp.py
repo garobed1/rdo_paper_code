@@ -162,10 +162,17 @@ class StatCompComponent(om.ExplicitComponent):
 
             self.surrogate.set_training_values(self.xtrain_act, self.ftrain_act)
             convert_to_smt_grads(self.surrogate, self.xtrain_act, self.gtrain_act)
-            self.surrogate.train()
             
+            self.surrogate.train()
+            if self.surrogate.name in ["Kriging"]:
+                print(self.surrogate.optimal_noise)
+                print(self.surrogate.optimal_noise)
+                print(self.surrogate.optimal_noise)
+                print(self.surrogate.optimal_noise)
+                print(self.surrogate.optimal_noise)
+                print(self.surrogate.optimal_noise)
+
             self.first_train = True
-            # import pdb; pdb.set_trace()
 
             if(self.options["print_surr_plots"]):
                 import matplotlib.pyplot as plt

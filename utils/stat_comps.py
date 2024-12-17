@@ -122,7 +122,7 @@ def _mu_sigma_grad(func_handle, N, tx, xlimits, scales, static_list, pdf_list, t
     work3 = np.multiply(2*summand, grads[:,static_list])
     work3 = (area/N)*np.sum(work3, axis=0)
     gstdev = work*(work3 - work2)
-    # import pdb; pdb.set_trace()
+
     #return full gradients, but gmean and gstdev are only with respect to dvs
     return (gmean, gstdev), grads
 

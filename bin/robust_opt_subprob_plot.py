@@ -10,7 +10,7 @@ from optimization.opt_trust_uncertain import UncertainTrust
 from surrogate.pougrad import POUHessian
 from collections import OrderedDict
 from utils.om_utils import grad_opt_feas
-import os, copy
+import os, sys, copy
 from functions.problem_picker import GetProblem
 from functions.smt_wrapper import SMTComponent
 from optimization.robust_objective import RobustSampler, CollocationSampler, AdaptiveSampler
@@ -74,6 +74,8 @@ with open(f'/{root}/{path}/{title}/reflog.pickle', 'rb') as f:
     reflog = pickle.load(f)
 with open(f'/{root}/{path}/{title}/prob_truth.pickle', 'rb') as f:
     prob_truth = pickle.load(f)
+
+sys.path.append(f'/{root}/{path}/')
 puse = path.split('/')
 puse = '.'.join(puse)
 optuse = '.'.join([title, 'opt_settings']) # missing path for now
@@ -102,7 +104,6 @@ pdfs = oset.pdfs
 t_dim = u_dim + d_dim
 func = GetProblem(oset.prob, t_dim)
 xlimits = func.xlimits
-
 # uq settings
 use_surrogate = oset.use_surrogate
 full_surrogate = oset.full_surrogate
@@ -257,7 +258,7 @@ probt.model.add_subsystem("stat",
                                   func=func,
                                   name=name))
 # doesn't need a driver
-probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
+# probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
 probt.driver.opt_settings = opt_settings
 probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
 probt.model.connect("x_d", "stat.x_d")
@@ -319,21 +320,21 @@ if not skip:
     ### LHS RHS CONVERGENCE
     # get end optimization if used
     ### OVERRIDE
-    if t_dim == 3:
-        probt.set_val('stat.x_d', prob_truth.design_history[1])
-        probt.run_driver()
-        prob_truth.iter_max = probt.model.iter_count - 1
-        prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
-    if t_dim == 4:
-        probt.set_val('stat.x_d', prob_truth.design_history[-2])
-        probt.run_driver()
-        prob_truth.iter_max = probt.model.iter_count - 1
-        prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
-    if t_dim == 2:
-        probt.set_val('stat.x_d', prob_truth.design_history[-2])
-        probt.run_driver()
-        prob_truth.iter_max = probt.model.iter_count - 1
-        prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
+    # if t_dim == 3:
+    #     probt.set_val('stat.x_d', prob_truth.design_history[1])
+    #     probt.run_driver()
+    #     prob_truth.iter_max = probt.model.iter_count - 1
+    #     prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
+    # if t_dim == 4:
+    #     probt.set_val('stat.x_d', prob_truth.design_history[-2])
+    #     probt.run_driver()
+    #     prob_truth.iter_max = probt.model.iter_count - 1
+    #     prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
+    # if t_dim == 2:
+    #     probt.set_val('stat.x_d', prob_truth.design_history[-2])
+    #     probt.run_driver()
+    #     prob_truth.iter_max = probt.model.iter_count - 1
+    #     prob_truth.design_history = prob_truth.design_history[-prob_truth.iter_max:]
 
     print(" ")
     print(probt.model.stat.func_calls)
@@ -366,7 +367,7 @@ if not skip:
                                       func=func,
                                       name=name))
     # doesn't need a driver
-    probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
+    # probt.driver = om.pyOptSparseDriver(optimizer= 'SNOPT') #Default: SLSQP
     probt.driver.opt_settings = opt_settings
     probt.driver = om.ScipyOptimizeDriver(optimizer='SLSQP') 
     probt.model.connect("x_d", "stat.x_d")

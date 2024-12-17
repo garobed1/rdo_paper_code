@@ -611,13 +611,10 @@ def estimate_pou_volume(trx, bounds):
     return dV
 
 
-#TODO: Probably need a test for this function, but it seems to work well
-# haven't tested predict derivatives or get training derivatives though
 def convert_to_smt_grads(smt_func, x_array=None, g_array=None, deriv_predict=False, name=None):
     """
     Either convert the gradients from smt_model.training_points OR an smt_problem
     into an appropriate ndarray or insert external gradients into an smt form. 
-    automating something implemented a million times
 
     Parameters
     ----------

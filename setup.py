@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="garo-rpi-graduate-work",
-    version="0.1.0",
+    name="rdo_paper_code",
+    version="0.2.0",
     author="Garo Bedonian",
     author_email="bedong@rpi.edu",
     description="A repository for the aerostructural multidisciplinary optimization-under-uncertainty code developed during my PhD.",
